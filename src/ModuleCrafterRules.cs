@@ -957,6 +957,26 @@ public static class ModuleCrafterRules
         return taken;
     }
 
+    public const long ModuleBayExpansionValueBonus = 100L;
+
+    public static long MachineCatalogValue(int moduleUpgradeStage)
+    {
+        int stage = moduleUpgradeStage < 0 ? 0 : moduleUpgradeStage;
+        return MachineUnitValue + (ModuleBayExpansionValueBonus * stage);
+    }
+
+    // Official MayTarget ANDs every vote, so a false from the machine would veto tools
+    // such as the vanilla module bay expansion kit.
+    public static bool ShouldAcceptMachineTarget(bool canRouteOntoMachine, bool? sourceAcceptsMachine)
+    {
+        if (canRouteOntoMachine)
+        {
+            return true;
+        }
+
+        return sourceAcceptsMachine == true;
+    }
+
     private static ModuleCrafterRecipe Common(ModuleCrafterChipKind kind)
     {
         return new ModuleCrafterRecipe(kind, ModuleCrafterTier.Common, 1, 80, 100, 80,

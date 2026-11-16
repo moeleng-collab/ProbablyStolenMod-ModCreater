@@ -29,6 +29,7 @@ internal static class RulesTests
         Refund_RulesAndPlanning();
         CompletionNightLog_UsesMorningReportColors();
         CraftedModuleEffects_IndependentRollsAndIncompatibility();
+        MachineTarget_AllowsExpansionKitWithoutVetoingRoutes();
         if (_failures != 0)
         {
             throw new Exception(_failures + " assertion(s) failed");
@@ -394,6 +395,21 @@ internal static class RulesTests
         string[] learningConflict = ModuleCrafterRules.RollCraftedModuleEffects(ScriptedRolls(learningAndPremium));
         AssertEqual(1, learningConflict.Length);
         AssertEqual("MODULE_EFFECT_PREMIUM", learningConflict[0]);
+    }
+
+    private static void MachineTarget_AllowsExpansionKitWithoutVetoingRoutes()
+    {
+        AssertEqual(100L, ModuleCrafterRules.ModuleBayExpansionValueBonus);
+        AssertEqual(ModuleCrafterRules.MachineUnitValue, ModuleCrafterRules.MachineCatalogValue(0));
+        AssertEqual(ModuleCrafterRules.MachineUnitValue, ModuleCrafterRules.MachineCatalogValue(-3));
+        AssertEqual(ModuleCrafterRules.MachineUnitValue + 100L, ModuleCrafterRules.MachineCatalogValue(1));
+        AssertEqual(ModuleCrafterRules.MachineUnitValue + 200L, ModuleCrafterRules.MachineCatalogValue(2));
+
+        AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(true, null));
+        AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(true, false));
+        AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(false, true));
+        AssertEqual(false, ModuleCrafterRules.ShouldAcceptMachineTarget(false, false));
+        AssertEqual(false, ModuleCrafterRules.ShouldAcceptMachineTarget(false, null));
     }
 
     private static Func<int, int> ScriptedRolls(int[] rolls)

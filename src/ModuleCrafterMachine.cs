@@ -72,7 +72,8 @@ public static class ModuleCrafterMachine
     {
         if (item.IsTag(ModuleCrafterIds.MachineTag) || item.identifier == ModuleCrafterIds.Machine)
         {
-            item.unitValue = ModuleCrafterRules.MachineUnitValue;
+            int stage = item.GetTagReadonly("MODULE_UPGRADE_STAGE_INT").GetInt();
+            item.unitValue = ModuleCrafterRules.MachineCatalogValue(stage);
             return;
         }
 
@@ -206,9 +207,13 @@ public static class ModuleCrafterMachine
         HookInventoryChanged(output, refresh);
 
         machine.mayItemTargetItemFunc = (GameItem incoming, GameItem target) =>
-            target == machine && MayRouteOntoMachine(incoming, machine);
+            target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
+                MayRouteOntoMachine(incoming, machine),
+                incoming?.mayItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
         machine.canItemTargetItemFunc = (GameItem incoming, GameItem target) =>
-            target == machine && MayRouteOntoMachine(incoming, machine);
+            target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
+                MayRouteOntoMachine(incoming, machine),
+                incoming?.canItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
         machine.onItemTargetItemFunc = delegate(GameItem incoming, GameItem target)
         {
             if (target == machine)

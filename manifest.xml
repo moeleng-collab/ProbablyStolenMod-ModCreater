@@ -3,7 +3,7 @@
   <ID>module_crafter</ID>
   <Name>模组制造机</Name>
   <Author>ModuleCrafter</Author>
-  <ModVersion>1.0.0</ModVersion>
+  <ModVersion>1.0.1</ModVersion>
   <Description>用配方芯片与材料制造通用模组。</Description>
   <GameVersions>
     <Version>0.46D</Version>
