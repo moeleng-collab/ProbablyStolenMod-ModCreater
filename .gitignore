@@ -1,0 +1,13 @@
+build/
+*.dll
+*.pdb
+*.mdb
+debug.on
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+tests/*.dll
+tests/*.pdb
+tests/*.runtimeconfig.json
