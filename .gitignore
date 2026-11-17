@@ -11,3 +11,4 @@ Thumbs.db
 tests/*.dll
 tests/*.pdb
 tests/*.runtimeconfig.json
+handoff/

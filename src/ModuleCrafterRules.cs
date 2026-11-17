@@ -47,7 +47,10 @@ public enum ModuleCrafterJacksonStockKey
     Fineness = 6,
     Streamlining = 7,
     Ticket = 8,
-    Core = 9
+    Core = 9,
+    Enhancer = 10,
+    Catalyst = 11,
+    SafeguardClip = 12
 }
 
 
@@ -199,6 +202,9 @@ public static class ModuleCrafterIds
 {
     public const string Machine = "module_crafter";
     public const string MachineTag = "MODULE_CRAFTER_MACHINE_TAG";
+    public const string Enhancer = "module_crafter_enhancer";
+    public const string EnhancerTag = "MODULE_CRAFTER_ENHANCER_TAG";
+    public const string Scrap = "scrap_metal";
     public const string ChipTag = "MODULE_CRAFTER_CHIP_TAG";
     public const string ChipPrefix = "module_crafter_chip_";
     public const string Electronic = "common_electronic";
@@ -216,6 +222,8 @@ public static class ModuleCrafterIds
     public const string NeuralUncapped = "system_uncapped_neural_core";
     public const string RefundTicket = "module_crafter_refund_ticket";
     public const string RefundCore = "module_crafter_refund_core";
+    public const string EnhanceCatalyst = "module_crafter_enhance_catalyst";
+    public const string SafeguardClip = "module_crafter_safeguard_clip";
 
     public static string Chip(ModuleCrafterChipKind kind)
     {
@@ -271,6 +279,7 @@ public static class ModuleCrafterIds
 public struct ModuleCrafterMerchantOffer
 {
     public int MachineCount;
+    public int EnhancerCount;
     public int TicketCount;
     public int ElectronicCount;
     public int CorruptHousingCount;
@@ -296,25 +305,28 @@ public struct ModuleCrafterMerchantPityState
 public static class ModuleCrafterRules
 {
     public const int GridSize = 16;
+    public const int MachineShapeWidth = 3;
+    public const string FullMachineShapeData = "111111111";
     // Vanilla system_module_quality bonus is +8; with MACHINE_QUALITY_RATIO_INT=1,
     // GetAjustedQuality is 8. k=2 makes one standard quality module +16, near the +15 target.
     public const int QualityBonusK = 2;
     public const int VanillaStandardQualityBonus = 8;
-    public const int IntactHousingBonusPercent = 5;
     public const int MinNights = 1;
     public const int DefaultBaseProcessingSpeed = 33;
 
     public const int MachineStockChanceIfUnowned = 70;
     public const int MachineStockChanceIfOwned = 15;
-    public const int CommonChipJacksonChance = 35;
+    public const int CommonChipJacksonChance = 50;
     public const int CommonChipCrateChance = 15;
     public const int CommonChipScrapyardChance = 8;
-    public const int AdvancedChipJacksonChance = 15;
+    public const int AdvancedChipJacksonChance = 50;
     public const int AdvancedChipCrateChance = 5;
     public const int AdvancedChipJacksonMinDay = 21;
-    public const int RefundTicketJacksonChance = 20;
-    public const int RefundCoreJacksonChance = 8;
+    public const int RefundTicketJacksonChance = 50;
+    public const int RefundCoreJacksonChance = 20;
     public const int RefundCoreJacksonMinDay = 21;
+    public const int CatalystJacksonChance = 50;
+    public const int SafeguardClipJacksonChance = 20;
     public const int RetiredMerchantWeekday = 1;
     public const int RetiredMerchantExtraTicketChance = 75;
     public const int RetiredMerchantExtraElectronicChance = 75;
@@ -370,28 +382,27 @@ public static class ModuleCrafterRules
 
     public static int ComputeSuccessPercent(ModuleCrafterChipKind kind, int adjustedQuality, int extraElectronics, bool usedIntactHousing)
     {
-        ModuleCrafterRecipe recipe = GetRecipe(kind);
-        int material = 0;
-        if (usedIntactHousing && recipe.Tier == ModuleCrafterTier.Common)
-        {
-            material += IntactHousingBonusPercent;
-        }
+        return ComputeSuccessPercent(kind, adjustedQuality, extraElectronics, usedIntactHousing, 0);
+    }
 
-        int raw = recipe.BaseSuccessPercent + (adjustedQuality * QualityBonusK) + material;
-        return Math.Clamp(raw, 0, recipe.SoftCapPercent);
+    public static int ComputeSuccessPercent(ModuleCrafterChipKind kind, int adjustedQuality, int extraElectronics, bool usedIntactHousing, int highestEnhancedQualityLevel)
+    {
+        ModuleCrafterRecipe recipe = GetRecipe(kind);
+        int raw = recipe.BaseSuccessPercent + (adjustedQuality * QualityBonusK);
+        int cap = ModuleCrafterEnhanceRules.EffectiveCraftSoftCap(recipe.SoftCapPercent, highestEnhancedQualityLevel);
+        return Math.Clamp(raw, 0, cap);
     }
 
     public static bool IsSoftCapped(ModuleCrafterChipKind kind, int adjustedQuality, int extraElectronics, bool usedIntactHousing)
     {
-        ModuleCrafterRecipe recipe = GetRecipe(kind);
-        int material = 0;
-        if (usedIntactHousing && recipe.Tier == ModuleCrafterTier.Common)
-        {
-            material += IntactHousingBonusPercent;
-        }
+        return IsSoftCapped(kind, adjustedQuality, extraElectronics, usedIntactHousing, 0);
+    }
 
-        int raw = recipe.BaseSuccessPercent + (adjustedQuality * QualityBonusK) + material;
-        return raw >= recipe.SoftCapPercent;
+    public static bool IsSoftCapped(ModuleCrafterChipKind kind, int adjustedQuality, int extraElectronics, bool usedIntactHousing, int highestEnhancedQualityLevel)
+    {
+        ModuleCrafterRecipe recipe = GetRecipe(kind);
+        int raw = recipe.BaseSuccessPercent + (adjustedQuality * QualityBonusK);
+        return raw >= ModuleCrafterEnhanceRules.EffectiveCraftSoftCap(recipe.SoftCapPercent, highestEnhancedQualityLevel);
     }
 
     public static int ComputeActualNights(int baseNights, int baseSpeed, int currentSpeed)
@@ -476,7 +487,8 @@ public static class ModuleCrafterRules
         int day,
         bool hasAnyMachine,
         bool ownsCrafter,
-        Func<int, int> nextExclusive)
+        Func<int, int> nextExclusive,
+        bool ownsEnhancer = false)
     {
         ModuleCrafterJacksonDayOffer offer = new ModuleCrafterJacksonDayOffer { Day = day };
         if (hasAnyMachine)
@@ -491,6 +503,19 @@ public static class ModuleCrafterRules
             if (offer.IsListed(ModuleCrafterJacksonStockKey.Machine))
             {
                 EnsureAtLeastOneCommonJacksonChip(offer, nextExclusive);
+            }
+
+            if (hasAnyMachine)
+            {
+                offer.SetListed(
+                    ModuleCrafterJacksonStockKey.Enhancer,
+                    RollStock(MachineStockChance(ownsEnhancer), nextExclusive));
+                offer.SetListed(
+                    ModuleCrafterJacksonStockKey.Catalyst,
+                    RollStock(CatalystJacksonChance, nextExclusive));
+                offer.SetListed(
+                    ModuleCrafterJacksonStockKey.SafeguardClip,
+                    RollStock(SafeguardClipJacksonChance, nextExclusive));
             }
 
             return offer;
@@ -511,6 +536,19 @@ public static class ModuleCrafterRules
         if (RefundCoreJacksonUnlocked(day))
         {
             offer.SetListed(ModuleCrafterJacksonStockKey.Core, RollStock(RefundCoreJacksonChance, nextExclusive));
+        }
+
+        if (hasAnyMachine)
+        {
+            offer.SetListed(
+                ModuleCrafterJacksonStockKey.Enhancer,
+                RollStock(MachineStockChance(ownsEnhancer), nextExclusive));
+            offer.SetListed(
+                ModuleCrafterJacksonStockKey.Catalyst,
+                RollStock(CatalystJacksonChance, nextExclusive));
+            offer.SetListed(
+                ModuleCrafterJacksonStockKey.SafeguardClip,
+                RollStock(SafeguardClipJacksonChance, nextExclusive));
         }
 
         return offer;
@@ -567,6 +605,9 @@ public static class ModuleCrafterRules
             ModuleCrafterJacksonStockKey.Streamlining => ModuleCrafterIds.Chip(ModuleCrafterChipKind.Streamlining),
             ModuleCrafterJacksonStockKey.Ticket => ModuleCrafterIds.RefundTicket,
             ModuleCrafterJacksonStockKey.Core => ModuleCrafterIds.RefundCore,
+            ModuleCrafterJacksonStockKey.Enhancer => ModuleCrafterIds.Enhancer,
+            ModuleCrafterJacksonStockKey.Catalyst => ModuleCrafterIds.EnhanceCatalyst,
+            ModuleCrafterJacksonStockKey.SafeguardClip => ModuleCrafterIds.SafeguardClip,
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
         };
     }
@@ -806,23 +847,15 @@ public static class ModuleCrafterRules
         ModuleCrafterRecipe recipe = GetRecipe(kind);
         bool[] used = new bool[itemIds.Count];
         System.Collections.Generic.List<int> consumed = new System.Collections.Generic.List<int>();
-        bool intact = false;
 
         foreach (ModuleCrafterMaterialNeed need in recipe.Required)
         {
             int remaining = need.Count;
             if (need.AllowCorruptOrRuinedHousing)
             {
+                // Common recipes require a damaged or ruined housing. Intact modules
+                // remain valid inputs only for recipes that explicitly request them.
                 remaining -= TakeMatching(itemIds, used, consumed, remaining, IsDamagedHousingId);
-                if (remaining > 0)
-                {
-                    int before = remaining;
-                    remaining -= TakeMatching(itemIds, used, consumed, remaining, IsIntactHousingId);
-                    if (remaining < before)
-                    {
-                        intact = true;
-                    }
-                }
             }
             else
             {
@@ -845,7 +878,7 @@ public static class ModuleCrafterRules
             }
         }
 
-        return new ModuleCrafterMaterialPlan(true, 0, intact, consumed.ToArray(), refundKind, refundLocks.ToArray());
+        return new ModuleCrafterMaterialPlan(true, 0, false, consumed.ToArray(), refundKind, refundLocks.ToArray());
     }
 
 
@@ -895,6 +928,7 @@ public static class ModuleCrafterRules
         ModuleCrafterMerchantOffer offer = new ModuleCrafterMerchantOffer
         {
             MachineCount = 1,
+            EnhancerCount = 1,
             TicketCount = RetiredMerchantBaseTickets,
             ElectronicCount = RetiredMerchantBaseElectronics,
             CorruptHousingCount = RetiredMerchantBaseHousing,
@@ -966,15 +1000,15 @@ public static class ModuleCrafterRules
     }
 
     // Official MayTarget ANDs every vote, so a false from the machine would veto tools
-    // such as the vanilla module bay expansion kit.
-    public static bool ShouldAcceptMachineTarget(bool canRouteOntoMachine, bool? sourceAcceptsMachine)
+    // such as the vanilla module bay expansion kit and turbo boosters.
+    public static bool ShouldAcceptMachineTarget(bool canRouteOntoMachine, bool? sourceAcceptsMachine, bool? sourceThisAcceptsMachine = null)
     {
         if (canRouteOntoMachine)
         {
             return true;
         }
 
-        return sourceAcceptsMachine == true;
+        return sourceAcceptsMachine == true || sourceThisAcceptsMachine == true;
     }
 
     private static ModuleCrafterRecipe Common(ModuleCrafterChipKind kind)

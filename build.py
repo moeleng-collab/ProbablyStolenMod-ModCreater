@@ -45,4 +45,10 @@ if textures_src.exists():
     has_files = any(textures_src.rglob("*.png")) or any(textures_src.rglob("*.jpg"))
     if has_files:
         shutil.copytree(textures_src, textures_dst)
+sounds_src = project / "Sounds"
+sounds_dst = install / "Sounds"
+if sounds_dst.exists():
+    shutil.rmtree(sounds_dst)
+if sounds_src.exists() and any(sounds_src.glob("*.wav")):
+    shutil.copytree(sounds_src, sounds_dst)
 print(f"Built and installed: {install}")

@@ -9,11 +9,11 @@ internal static class RulesTests
     {
         RecipeTable_MatchesDesign();
         ChipIds_UseVanillaEfficiencyTypo();
-        Success_AppliesQualityAndMaterialBonuses();
+        Success_AppliesQualityBonus();
         Success_ClampsToSoftCap();
         Success_NegativeQualityReducesChance();
         Success_IgnoresExtraElectronics();
-        Success_IntactHousingBonusOnlyForCommon();
+        Success_UsedIntactHousingFlagDoesNotChangeChance();
         Success_StandardQualityModuleCalibratesNearFifteen();
         Materials_PlanRequiresHousingAndElectronics();
         Materials_OnlyAllowsCraftInputs();
@@ -30,6 +30,7 @@ internal static class RulesTests
         CompletionNightLog_UsesMorningReportColors();
         CraftedModuleEffects_IndependentRollsAndIncompatibility();
         MachineTarget_AllowsExpansionKitWithoutVetoingRoutes();
+        EnhanceRulesTests.Run();
         if (_failures != 0)
         {
             throw new Exception(_failures + " assertion(s) failed");
@@ -68,9 +69,9 @@ internal static class RulesTests
         AssertEqual("system_module_efficiancy", ModuleCrafterIds.Efficiency);
     }
 
-    private static void Success_AppliesQualityAndMaterialBonuses()
+    private static void Success_AppliesQualityBonus()
     {
-        // 80 + 15*k(2) + intact housing 5 = 115, capped to 100; extra electronics are ignored
+        // 80 + 15*k(2) = 110, capped to 100; extra electronics are ignored.
         AssertEqual(100, ModuleCrafterRules.ComputeSuccessPercent(ModuleCrafterChipKind.Performance, 15, 2, true));
         // 55 + 10*k(2) = 75
         AssertEqual(75, ModuleCrafterRules.ComputeSuccessPercent(ModuleCrafterChipKind.Overclock, 10, 1, false));
@@ -102,13 +103,13 @@ internal static class RulesTests
         AssertEqual(none, many);
     }
 
-    private static void Success_IntactHousingBonusOnlyForCommon()
+    private static void Success_UsedIntactHousingFlagDoesNotChangeChance()
     {
         int commonPlain = ModuleCrafterRules.ComputeSuccessPercent(ModuleCrafterChipKind.Quality, 0, 0, false);
         int commonIntact = ModuleCrafterRules.ComputeSuccessPercent(ModuleCrafterChipKind.Quality, 0, 0, true);
         int advancedIntact = ModuleCrafterRules.ComputeSuccessPercent(ModuleCrafterChipKind.Fineness, 0, 0, true);
         int advancedPlain = ModuleCrafterRules.ComputeSuccessPercent(ModuleCrafterChipKind.Fineness, 0, 0, false);
-        AssertEqual(commonPlain + 5, commonIntact);
+        AssertEqual(commonPlain, commonIntact);
         AssertEqual(advancedPlain, advancedIntact);
     }
 
@@ -138,12 +139,27 @@ internal static class RulesTests
         AssertEqual(0, damaged.ExtraElectronics);
         AssertEqual(3, damaged.ConsumedIndices.Length);
 
+        ModuleCrafterMaterialPlan ruined = ModuleCrafterRules.PlanMaterials(
+            ModuleCrafterChipKind.Quality,
+            new[] { ModuleCrafterIds.Ruined, ModuleCrafterIds.Electronic, ModuleCrafterIds.Electronic });
+        AssertEqual(true, ruined.HasRequired);
+        AssertEqual(false, ruined.UsedIntactHousing);
+
         ModuleCrafterMaterialPlan intact = ModuleCrafterRules.PlanMaterials(
             ModuleCrafterChipKind.Performance,
             new[] { ModuleCrafterIds.Quality, ModuleCrafterIds.Electronic, ModuleCrafterIds.Electronic });
-        AssertEqual(true, intact.HasRequired);
-        AssertEqual(true, intact.UsedIntactHousing);
-        AssertEqual(0, intact.ExtraElectronics);
+        AssertEqual(false, intact.HasRequired);
+
+        intact = ModuleCrafterRules.PlanMaterials(
+            ModuleCrafterChipKind.Performance,
+            new[] { ModuleCrafterIds.Performance, ModuleCrafterIds.Electronic, ModuleCrafterIds.Electronic });
+        AssertEqual(false, intact.HasRequired);
+
+        ModuleCrafterMaterialPlan advanced = ModuleCrafterRules.PlanMaterials(
+            ModuleCrafterChipKind.Overclock,
+            new[] { ModuleCrafterIds.Performance, ModuleCrafterIds.Electronic, ModuleCrafterIds.Electronic, ModuleCrafterIds.Electronic });
+        AssertEqual(true, advanced.HasRequired);
+        AssertEqual(4, advanced.ConsumedIndices.Length);
     }
 
     private static void Nights_NeverDropBelowOne()
@@ -191,10 +207,10 @@ internal static class RulesTests
     {
         AssertEqual(70, ModuleCrafterRules.MachineStockChance(false));
         AssertEqual(15, ModuleCrafterRules.MachineStockChance(true));
-        AssertEqual(35, ModuleCrafterRules.CommonChipJacksonChance);
+        AssertEqual(50, ModuleCrafterRules.CommonChipJacksonChance);
         AssertEqual(15, ModuleCrafterRules.CommonChipCrateChance);
         AssertEqual(8, ModuleCrafterRules.CommonChipScrapyardChance);
-        AssertEqual(15, ModuleCrafterRules.AdvancedChipJacksonChance);
+        AssertEqual(50, ModuleCrafterRules.AdvancedChipJacksonChance);
         AssertEqual(5, ModuleCrafterRules.AdvancedChipCrateChance);
         AssertEqual(false, ModuleCrafterRules.AdvancedJacksonUnlocked(20));
         AssertEqual(true, ModuleCrafterRules.AdvancedJacksonUnlocked(21));
@@ -215,8 +231,10 @@ internal static class RulesTests
         AssertEqual(60, ModuleCrafterRules.RefundTicketUnitValue);
         AssertEqual(1200, ModuleCrafterRules.RefundCoreUnitValue);
 
-        AssertEqual(20, ModuleCrafterRules.RefundTicketJacksonChance);
-        AssertEqual(8, ModuleCrafterRules.RefundCoreJacksonChance);
+        AssertEqual(50, ModuleCrafterRules.RefundTicketJacksonChance);
+        AssertEqual(20, ModuleCrafterRules.RefundCoreJacksonChance);
+        AssertEqual(50, ModuleCrafterRules.CatalystJacksonChance);
+        AssertEqual(20, ModuleCrafterRules.SafeguardClipJacksonChance);
         AssertEqual(false, ModuleCrafterRules.RefundCoreJacksonUnlocked(20));
         AssertEqual(true, ModuleCrafterRules.RefundCoreJacksonUnlocked(21));
     }
@@ -302,6 +320,52 @@ internal static class RulesTests
         AssertEqual(true, ModuleCrafterRules.TryGetJacksonStockKey(ModuleCrafterIds.RefundTicket, out key));
         AssertEqual(ModuleCrafterJacksonStockKey.Ticket, key);
         AssertEqual(false, ModuleCrafterRules.TryGetJacksonStockKey(ModuleCrafterIds.Chip(ModuleCrafterChipKind.NeuralCapped), out key));
+        Stock_EnhancerAvailabilityAndMapping();
+    }
+
+    private static void Stock_EnhancerAvailabilityAndMapping()
+    {
+        AssertEqual(ModuleCrafterIds.Enhancer, ModuleCrafterRules.JacksonStockItemId(ModuleCrafterJacksonStockKey.Enhancer));
+        AssertEqual(ModuleCrafterIds.EnhanceCatalyst, ModuleCrafterRules.JacksonStockItemId(ModuleCrafterJacksonStockKey.Catalyst));
+        AssertEqual(ModuleCrafterIds.SafeguardClip, ModuleCrafterRules.JacksonStockItemId(ModuleCrafterJacksonStockKey.SafeguardClip));
+        AssertEqual(true, ModuleCrafterRules.TryGetJacksonStockKey(ModuleCrafterIds.Enhancer, out ModuleCrafterJacksonStockKey enhancerKey));
+        AssertEqual(ModuleCrafterJacksonStockKey.Enhancer, enhancerKey);
+        AssertEqual(true, ModuleCrafterRules.TryGetJacksonStockKey(ModuleCrafterIds.EnhanceCatalyst, out ModuleCrafterJacksonStockKey catalystKey));
+        AssertEqual(ModuleCrafterJacksonStockKey.Catalyst, catalystKey);
+        AssertEqual(true, ModuleCrafterRules.TryGetJacksonStockKey(ModuleCrafterIds.SafeguardClip, out ModuleCrafterJacksonStockKey clipKey));
+        AssertEqual(ModuleCrafterJacksonStockKey.SafeguardClip, clipKey);
+        AssertEqual(false, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.Enhancer));
+
+        ModuleCrafterJacksonDayOffer locked = ModuleCrafterRules.RollJacksonDayOffer(12, false, false, _ => 0);
+        AssertEqual(false, locked.IsListed(ModuleCrafterJacksonStockKey.Enhancer));
+        AssertEqual(false, locked.IsListed(ModuleCrafterJacksonStockKey.Catalyst));
+        AssertEqual(false, locked.IsListed(ModuleCrafterJacksonStockKey.SafeguardClip));
+        ModuleCrafterJacksonDayOffer unownedHit = ModuleCrafterRules.RollJacksonDayOffer(12, true, false, _ => 0);
+        AssertEqual(true, unownedHit.IsListed(ModuleCrafterJacksonStockKey.Enhancer));
+        AssertEqual(true, unownedHit.IsListed(ModuleCrafterJacksonStockKey.Catalyst));
+        AssertEqual(true, unownedHit.IsListed(ModuleCrafterJacksonStockKey.SafeguardClip));
+        ModuleCrafterJacksonDayOffer allMiss = ModuleCrafterRules.RollJacksonDayOffer(12, true, true, _ => 99);
+        AssertEqual(false, allMiss.IsListed(ModuleCrafterJacksonStockKey.Enhancer));
+        AssertEqual(false, allMiss.IsListed(ModuleCrafterJacksonStockKey.Catalyst));
+        AssertEqual(false, allMiss.IsListed(ModuleCrafterJacksonStockKey.SafeguardClip));
+        ModuleCrafterJacksonDayOffer ownedBoundaryHit = ModuleCrafterRules.RollJacksonDayOffer(12, true, false, _ => 14, ownsEnhancer: true);
+        AssertEqual(true, ownedBoundaryHit.IsListed(ModuleCrafterJacksonStockKey.Enhancer));
+        ModuleCrafterJacksonDayOffer ownedBoundaryMiss = ModuleCrafterRules.RollJacksonDayOffer(12, true, false, _ => 15, ownsEnhancer: true);
+        AssertEqual(false, ownedBoundaryMiss.IsListed(ModuleCrafterJacksonStockKey.Enhancer));
+        ModuleCrafterJacksonDayOffer catalystBoundaryHit = ModuleCrafterRules.RollJacksonDayOffer(12, true, false, _ => 49);
+        AssertEqual(true, catalystBoundaryHit.IsListed(ModuleCrafterJacksonStockKey.Catalyst));
+        AssertEqual(false, catalystBoundaryHit.IsListed(ModuleCrafterJacksonStockKey.SafeguardClip));
+        ModuleCrafterJacksonDayOffer catalystBoundaryMiss = ModuleCrafterRules.RollJacksonDayOffer(12, true, false, _ => 50);
+        AssertEqual(false, catalystBoundaryMiss.IsListed(ModuleCrafterJacksonStockKey.Catalyst));
+        ModuleCrafterJacksonDayOffer clipBoundaryHit = ModuleCrafterRules.RollJacksonDayOffer(12, true, false, _ => 19);
+        AssertEqual(true, clipBoundaryHit.IsListed(ModuleCrafterJacksonStockKey.SafeguardClip));
+        ModuleCrafterJacksonDayOffer clipBoundaryMiss = ModuleCrafterRules.RollJacksonDayOffer(12, true, false, _ => 20);
+        AssertEqual(false, clipBoundaryMiss.IsListed(ModuleCrafterJacksonStockKey.SafeguardClip));
+
+        AssertEqual(1, ModuleCrafterRules.RollRetiredMerchantOffer(8, _ => 0).EnhancerCount);
+        AssertEqual(1, ModuleCrafterRules.RollRetiredMerchantOffer(8, _ => 99).EnhancerCount);
+        AssertEqual(1, ModuleCrafterRules.RollRetiredMerchantOffer(21, _ => 0).EnhancerCount);
+        AssertEqual(1, ModuleCrafterRules.RollRetiredMerchantOffer(21, _ => 99).EnhancerCount);
     }
 
     private static void Refund_RulesAndPlanning()
@@ -399,6 +463,9 @@ internal static class RulesTests
 
     private static void MachineTarget_AllowsExpansionKitWithoutVetoingRoutes()
     {
+        AssertEqual(3, ModuleCrafterRules.MachineShapeWidth);
+        AssertEqual(9, ModuleCrafterRules.FullMachineShapeData.Length);
+        AssertEqual(true, ModuleCrafterRules.FullMachineShapeData.All(cell => cell == '1'));
         AssertEqual(100L, ModuleCrafterRules.ModuleBayExpansionValueBonus);
         AssertEqual(ModuleCrafterRules.MachineUnitValue, ModuleCrafterRules.MachineCatalogValue(0));
         AssertEqual(ModuleCrafterRules.MachineUnitValue, ModuleCrafterRules.MachineCatalogValue(-3));
@@ -410,6 +477,10 @@ internal static class RulesTests
         AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(false, true));
         AssertEqual(false, ModuleCrafterRules.ShouldAcceptMachineTarget(false, false));
         AssertEqual(false, ModuleCrafterRules.ShouldAcceptMachineTarget(false, null));
+        AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(false, null, true));
+        AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(false, false, true));
+        AssertEqual(false, ModuleCrafterRules.ShouldAcceptMachineTarget(false, null, false));
+        AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(true, null, false));
     }
 
     private static Func<int, int> ScriptedRolls(int[] rolls)

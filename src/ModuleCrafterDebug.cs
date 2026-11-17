@@ -76,6 +76,7 @@ public static class ModuleCrafterDebug
     {
         int added = 0;
         added += Give(ModuleCrafterIds.Machine);
+        added += Give(ModuleCrafterIds.Enhancer);
         added += Give(ModuleCrafterIds.Battery);
         added += Give(ModuleCrafterIds.Battery);
         foreach (ModuleCrafterChipKind kind in (ModuleCrafterChipKind[])Enum.GetValues(typeof(ModuleCrafterChipKind)))
@@ -100,6 +101,17 @@ public static class ModuleCrafterDebug
         added += Give(ModuleCrafterIds.RefundTicket);
         added += Give(ModuleCrafterIds.RefundTicket);
         added += Give(ModuleCrafterIds.RefundCore);
+        for (int i = 0; i < 12; i++)
+        {
+            added += Give(ModuleCrafterIds.EnhanceCatalyst);
+            added += Give("scrap_metal");
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            added += Give(ModuleCrafterIds.SafeguardClip);
+        }
+
         ModuleCrafterMod.LogMsg("Debug kit granted (" + added + " items).");
     }
 
@@ -149,24 +161,39 @@ public static class ModuleCrafterDebug
         int count = 0;
         foreach (GameItem machine in FindMachines())
         {
-            if (string.IsNullOrEmpty(result))
-            {
-                machine.DisableTag(ModuleCrafterMachine.ForceResultTag);
-            }
-            else
-            {
-                machine.ModifyTag(ModuleCrafterMachine.ForceResultTag, delegate(TagState state)
-                {
-                    state.Enable().SetString(result);
-                });
-            }
-
+            ApplyForceResult(machine, result);
             count++;
         }
 
+        if (PlayerStore.Instance != null)
+        {
+            foreach (GameItem machine in PlayerStore.Instance.FindAllItem())
+            {
+                if (machine != null && machine.IsTag(ModuleCrafterIds.EnhancerTag))
+                {
+                    ApplyForceResult(machine, result);
+                    count++;
+                }
+            }
+        }
+
         ModuleCrafterMod.LogMsg(count == 0
-            ? "No Module Crafter found to apply force result."
+            ? "No Module Crafter or Module Enhancer found to apply force result."
             : "Force result set to " + (result ?? "cleared") + " on " + count + " machine(s).");
+    }
+
+    private static void ApplyForceResult(GameItem machine, string result)
+    {
+        if (string.IsNullOrEmpty(result))
+        {
+            machine.DisableTag(ModuleCrafterMachine.ForceResultTag);
+            return;
+        }
+
+        machine.ModifyTag(ModuleCrafterMachine.ForceResultTag, delegate(TagState state)
+        {
+            state.Enable().SetString(result);
+        });
     }
 
     public static void ChargeBatteries(bool fill)

@@ -105,7 +105,9 @@ public static class ModuleCrafterMerchant
             + nextPity.NeuralUncappedMisses + " misses, core "
             + ModuleCrafterRules.RetiredMerchantPityChance(pity.RefundCoreMisses) + "% -> "
             + nextPity.RefundCoreMisses + " misses.");
-        return PlaceOffer(offer);
+        int placed = PlaceOffer(offer);
+        placed += ModuleCrafterEnhanceSources.PlaceEnhancementStock(day);
+        return placed;
     }
 
     public static int PlaceOffer(ModuleCrafterMerchantOffer offer)
@@ -117,6 +119,7 @@ public static class ModuleCrafterMerchant
 
         int added = 0;
         added += AddCopies(ModuleCrafterIds.Machine, offer.MachineCount);
+        added += AddCopies(ModuleCrafterIds.Enhancer, offer.EnhancerCount);
         if (offer.PerformanceChip)
         {
             added += AddCopies(ModuleCrafterIds.Chip(ModuleCrafterChipKind.Performance), 1);

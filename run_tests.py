@@ -20,7 +20,9 @@ args = [
 args.extend(f"-reference:{path}" for path in refs.glob("*.dll"))
 args.extend([
     str(project / "src" / "ModuleCrafterRules.cs"),
+    str(project / "src" / "ModuleCrafterEnhanceRules.cs"),
     str(tests / "RulesTests.cs"),
+    str(tests / "EnhanceRulesTests.cs"),
 ])
 subprocess.run(args, check=True, cwd=root)
 

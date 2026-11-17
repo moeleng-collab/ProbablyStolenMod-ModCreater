@@ -35,7 +35,8 @@ public static class ModuleCrafterStock
             day,
             PlayerStore.Instance.IsPlayerHaveMachine(),
             PlayerOwnsCrafter(),
-            NextExclusive);
+            NextExclusive,
+            PlayerOwnsEnhancer());
 
         int added = 0;
         foreach (ModuleCrafterJacksonStockKey key in (ModuleCrafterJacksonStockKey[])Enum.GetValues(typeof(ModuleCrafterJacksonStockKey)))
@@ -58,6 +59,16 @@ public static class ModuleCrafterStock
 
     public static bool PlayerOwnsCrafter()
     {
+        return PlayerOwns(ModuleCrafterIds.Machine);
+    }
+
+    public static bool PlayerOwnsEnhancer()
+    {
+        return PlayerOwns(ModuleCrafterIds.Enhancer);
+    }
+
+    private static bool PlayerOwns(string itemId)
+    {
         if (PlayerStore.Instance == null)
         {
             return false;
@@ -65,9 +76,7 @@ public static class ModuleCrafterStock
 
         foreach (GameItem item in PlayerStore.Instance.FindAllItem())
         {
-            if (item != null
-                && item.identifier == ModuleCrafterIds.Machine
-                && GeneralHelper.IsItemOwned(item))
+            if (item != null && item.identifier == itemId && GeneralHelper.IsItemOwned(item))
             {
                 return true;
             }
@@ -87,9 +96,12 @@ public static class ModuleCrafterStock
         {
             case ChannelJackson:
                 PlayerStore.Instance.AddDirectSellingItemToTable(ModuleCrafterIds.Machine, isOwend: false, isStolen: false);
+                PlayerStore.Instance.AddDirectSellingItemToTable(ModuleCrafterIds.Enhancer, isOwend: false, isStolen: false);
                 PlayerStore.Instance.AddDirectSellingItemToTable(ModuleCrafterIds.RefundTicket, isOwend: false, isStolen: false);
                 PlayerStore.Instance.AddDirectSellingItemToTable(ModuleCrafterIds.RefundCore, isOwend: false, isStolen: false);
-                return "Jackson: module_crafter, refund ticket, and refund core on the counter.";
+                PlayerStore.Instance.AddDirectSellingItemToTable(ModuleCrafterIds.EnhanceCatalyst, isOwend: false, isStolen: false);
+                PlayerStore.Instance.AddDirectSellingItemToTable(ModuleCrafterIds.SafeguardClip, isOwend: false, isStolen: false);
+                return "Jackson: machines, refund items, enhancement catalyst, and stabilizing clip on the counter.";
             case ChannelThief:
                 PlayerStore.Instance.AddDirectSellingItemToTable(ModuleCrafterIds.Chip(ModuleCrafterChipKind.NeuralCapped), isOwend: false, isStolen: true);
                 return "Thief: capped neural chip on the counter.";

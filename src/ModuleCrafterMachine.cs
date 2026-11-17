@@ -10,6 +10,7 @@ public static class ModuleCrafterMachine
     public const int MaterialsSlotIndex = 3;
     public const int OutputSlotIndex = 4;
     public const int HeldSlotIndex = 5;
+    public const int LegacyEnhancementSlotIndex = 6;
 
     public const string ForceResultTag = "MODULE_CRAFTER_FORCE_TAG";
     public const string KindTag = "MODULE_CRAFTER_KIND_TAG";
@@ -28,6 +29,7 @@ public static class ModuleCrafterMachine
 
         directory.Add(ModuleCrafterIds.RefundTicket, CreateRefundTicket);
         directory.Add(ModuleCrafterIds.RefundCore, CreateRefundCore);
+        ModuleCrafterEnhancement.RegisterItems(directory);
     }
 
     public static void OnGameLoaded()
@@ -65,6 +67,18 @@ public static class ModuleCrafterMachine
             {
                 GeneralHelper.LoadLockItem(child);
             }
+
+            foreach (GameItem child in SlotItems(MachineHelper.GetSlot(item, LegacyEnhancementSlotIndex)))
+            {
+                if (GeneralHelper.IsItemLocked(child))
+                {
+                    GeneralHelper.UnlockItem(child);
+                }
+
+                GeneralHelper.SetItemOwned(child, own: true);
+                GraphUtils.EmporiumTryAdd(child);
+                ModuleCrafterMod.LogMsg("Returned legacy crafter enhancement item " + child.identifier + " to the store inventory.");
+            }
         }
     }
 
@@ -90,6 +104,14 @@ public static class ModuleCrafterMachine
         else if (item.identifier == ModuleCrafterIds.RefundCore)
         {
             item.unitValue = ModuleCrafterRules.RefundCoreUnitValue;
+        }
+        else if (item.identifier == ModuleCrafterIds.EnhanceCatalyst)
+        {
+            item.unitValue = ModuleCrafterEnhanceRules.CatalystUnitValue;
+        }
+        else if (item.identifier == ModuleCrafterIds.SafeguardClip)
+        {
+            item.unitValue = ModuleCrafterEnhanceRules.SafeguardClipUnitValue;
         }
     }
 
@@ -148,6 +170,8 @@ public static class ModuleCrafterMachine
         GameGridInventory materials = new GameGridInventory(8, 6);
         GameSlotInventory output = new GameSlotInventory(4, 4);
         GameGridInventory held = new GameGridInventory(8, 6);
+        // Kept hidden for one release so 2.0.x saves can return the old enhancement item.
+        GameSlotInventory legacyEnhancement = new GameSlotInventory(4, 4);
         MachineryText preview = new MachineryText(ModuleCrafterLocalization.T("preview_empty"), 6)
             .SetUppercase(false)
             .SetFillWidth(true)
@@ -162,6 +186,7 @@ public static class ModuleCrafterMachine
             item != null && ModuleCrafterRules.IsCraftMaterial(item.identifier);
         output.mayInventoryAddItemFunc = (GameItem _, GameInventory _) => false;
         held.mayInventoryAddItemFunc = (GameItem _, GameInventory _) => false;
+        legacyEnhancement.mayInventoryAddItemFunc = (GameItem _, GameInventory _) => false;
 
         PixelWindow window = MachineHelper.CreateMachineryWindow(
             true,
@@ -171,7 +196,8 @@ public static class ModuleCrafterMachine
             MachineHelper.Panel(ModuleCrafterLocalization.T("label_materials"), materials, "materials"),
             MachineHelper.Panel(ModuleCrafterLocalization.T("label_output"), output, "output"),
             MachineHelper.Panel(ModuleCrafterLocalization.T("label_control"), controls, "control", styleInventories: false),
-            MachineHelper.Panel("", held, "held").SetHidden(true));
+            MachineHelper.Panel("", held, "held").SetHidden(true),
+            MachineHelper.Panel("", legacyEnhancement, "enhance").SetHidden(true));
 
         GameItem machine = ItemDirectory.CreateEmptyItem(ModuleCrafterIds.Machine)
             .SetContentWindow(window)
@@ -206,14 +232,19 @@ public static class ModuleCrafterMachine
         HookInventoryChanged(materials, refresh);
         HookInventoryChanged(output, refresh);
 
+        // GameItem.MayTarget/CanTarget invokes this callback for both source and target.
+        // Never query the source callbacks again for a machine self-target: incoming is
+        // the same machine, so doing so recursively invokes this delegate forever.
         machine.mayItemTargetItemFunc = (GameItem incoming, GameItem target) =>
-            target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
+            incoming != machine && target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
                 MayRouteOntoMachine(incoming, machine),
-                incoming?.mayItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
+                incoming?.mayItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR),
+                incoming?.mayThisTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
         machine.canItemTargetItemFunc = (GameItem incoming, GameItem target) =>
-            target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
+            incoming != machine && target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
                 MayRouteOntoMachine(incoming, machine),
-                incoming?.canItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
+                incoming?.canItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR),
+                incoming?.canThisTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
         machine.onItemTargetItemFunc = delegate(GameItem incoming, GameItem target)
         {
             if (target == machine)
@@ -227,7 +258,7 @@ public static class ModuleCrafterMachine
             OnNight(item, preview, chip, materials, output, modules);
         };
 
-        RefreshPreview(machine, preview, chip, materials, output);
+        refresh();
         return machine;
     }
 
@@ -332,7 +363,7 @@ public static class ModuleCrafterMachine
 
         ModuleCrafterRecipe recipe = ModuleCrafterRules.GetRecipe(kind);
         int quality = ModuleHelper.GetAjustedQuality(machine);
-        int success = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing);
+        int success = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine));
         MachineProgressHelper.InitProgressSourceItem(
             chipItem,
             ModuleCrafterRules.DefaultBaseProcessingSpeed * recipe.BaseNights,
@@ -453,7 +484,7 @@ public static class ModuleCrafterMachine
                 plan = PlanFrom(kind, held);
             }
 
-            success = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing);
+            success = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine));
             ModuleCrafterMod.LogMsg("Success tag missing at finish; recomputed " + success + "%.");
         }
 
@@ -603,11 +634,11 @@ public static class ModuleCrafterMachine
 
         ModuleCrafterRecipe recipe = ModuleCrafterRules.GetRecipe(kind);
         int quality = ModuleHelper.GetAjustedQuality(machine);
-        int successReady = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing);
+        int successReady = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine));
         int baseSpeed = machine.GetTagReadonly("BASE_PROCESSING_SPEED_TAG").GetInt();
         int currentSpeed = machine.GetTagReadonly("CURRENT_PROCESSING_SPEED_TAG").GetInt();
         int nights = ModuleCrafterRules.ComputeActualNights(recipe.BaseNights, baseSpeed, currentSpeed);
-        string cap = ModuleCrafterRules.IsSoftCapped(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing)
+        string cap = ModuleCrafterRules.IsSoftCapped(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine))
             ? ModuleCrafterLocalization.T("preview_capped")
             : "";
         preview.SetText(ModuleCrafterLocalization.T("preview_ready", successReady, cap, nights) + needs + RefundPreviewText(plan.RefundKind));

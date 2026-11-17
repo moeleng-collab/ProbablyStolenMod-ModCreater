@@ -3,8 +3,8 @@
   <ID>module_crafter</ID>
   <Name>模组制造机</Name>
   <Author>ModuleCrafter</Author>
-  <ModVersion>1.0.1</ModVersion>
-  <Description>用配方芯片与材料制造通用模组。</Description>
+  <ModVersion>2.1.6</ModVersion>
+  <Description>制造通用模组，并使用独立模组强化器进行 +0 至 +12 强化、触媒兑换与稳固夹保护。</Description>
   <GameVersions>
     <Version>0.46D</Version>
   </GameVersions>
@@ -12,5 +12,7 @@
   <Assemblies>
     <Assembly>ModuleCrafter.dll</Assembly>
   </Assemblies>
-  <Capabilities />
+  <Capabilities>
+    <Capability>reflection-external</Capability>
+  </Capabilities>
 </Manifest>
