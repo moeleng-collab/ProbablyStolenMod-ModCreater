@@ -20,6 +20,8 @@ internal static class RulesTests
         Nights_NeverDropBelowOne();
         Nights_UncappedTakesFiveWhenSpeedUnchanged();
         CanStart_RequiresMaterialsAndPower();
+        PowerBilling_OnlyChargesForActiveUnblockedWork();
+        WorkingPowerDraw_MatchesVanillaModuleCalculations();
         Cancel_RefundsAllMaterials();
         Failure_UsesTierRates();
         Stock_UsesDesignedPercentsAndDayGates();
@@ -30,6 +32,7 @@ internal static class RulesTests
         CompletionNightLog_UsesMorningReportColors();
         CraftedModuleEffects_IndependentRollsAndIncompatibility();
         MachineTarget_AllowsExpansionKitWithoutVetoingRoutes();
+        ExpansionRulesTests.Run();
         EnhanceRulesTests.Run();
         if (_failures != 0)
         {
@@ -185,6 +188,24 @@ internal static class RulesTests
         AssertEqual(false, ModuleCrafterRules.CanStart(true, false));
     }
 
+    private static void PowerBilling_OnlyChargesForActiveUnblockedWork()
+    {
+        AssertEqual(0, ModuleCrafterRules.GetPowerDrawForBilling(false, false, 10));
+        AssertEqual(0, ModuleCrafterRules.GetPowerDrawForBilling(false, true, 10));
+        AssertEqual(0, ModuleCrafterRules.GetPowerDrawForBilling(true, true, 10));
+        AssertEqual(10, ModuleCrafterRules.GetPowerDrawForBilling(true, false, 10));
+    }
+
+    private static void WorkingPowerDraw_MatchesVanillaModuleCalculations()
+    {
+        AssertEqual(10, ModuleCrafterRules.ComputeWorkingPowerDraw(10, 0));
+        AssertEqual(8, ModuleCrafterRules.ComputeWorkingPowerDraw(10, 20));
+        AssertEqual(9, ModuleCrafterRules.ComputeWorkingPowerDraw(10, 20, efficiencyRatio: 2));
+        AssertEqual(8, ModuleCrafterRules.ComputeWorkingPowerDraw(
+            10, 0, performancePercent: 50, performanceRatio: 2, performanceReducesPower: true));
+        AssertEqual(1, ModuleCrafterRules.ComputeWorkingPowerDraw(10, 500));
+    }
+
     private static void Cancel_RefundsAllMaterials()
     {
         AssertEqual(true, ModuleCrafterRules.ConsumeMaterialsOnCompletionOnly);
@@ -250,7 +271,7 @@ internal static class RulesTests
         AssertEqual(true, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.NeuralUncapped));
         AssertEqual(true, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.RefundTicket));
         AssertEqual(true, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.RefundCore));
-        AssertEqual(false, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.Battery));
+        AssertEqual(true, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.Battery));
         AssertEqual(false, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.Chip(ModuleCrafterChipKind.Performance)));
         AssertEqual(false, ModuleCrafterRules.IsCraftMaterial(ModuleCrafterIds.Machine));
         AssertEqual(false, ModuleCrafterRules.IsCraftMaterial("storage_crate"));
@@ -481,6 +502,11 @@ internal static class RulesTests
         AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(false, false, true));
         AssertEqual(false, ModuleCrafterRules.ShouldAcceptMachineTarget(false, null, false));
         AssertEqual(true, ModuleCrafterRules.ShouldAcceptMachineTarget(true, null, false));
+        AssertEqual(true, ModuleCrafterRules.ShouldAllowTurboBoost(false, false, true, false));
+        AssertEqual(true, ModuleCrafterRules.ShouldAllowTurboBoost(true, true, false, true));
+        AssertEqual(false, ModuleCrafterRules.ShouldAllowTurboBoost(true, false, false, true));
+        AssertEqual(false, ModuleCrafterRules.ShouldAllowTurboBoost(true, true, true, true));
+        AssertEqual(false, ModuleCrafterRules.ShouldAllowTurboBoost(true, true, false, false));
     }
 
     private static Func<int, int> ScriptedRolls(int[] rolls)
@@ -521,6 +547,7 @@ internal static class RulesTests
         AssertEqual(2, earlyHit.TicketCount);
         AssertEqual(3, earlyHit.ElectronicCount);
         AssertEqual(2, earlyHit.CorruptHousingCount);
+        AssertEqual(2, earlyHit.RuinedHousingCount);
         AssertEqual(false, earlyHit.NeuralCappedChip);
         AssertEqual(false, earlyHit.NeuralUncappedChip);
         AssertEqual(false, earlyHit.RefundCore);
@@ -529,6 +556,7 @@ internal static class RulesTests
         AssertEqual(1, earlyMiss.TicketCount);
         AssertEqual(2, earlyMiss.ElectronicCount);
         AssertEqual(1, earlyMiss.CorruptHousingCount);
+        AssertEqual(1, earlyMiss.RuinedHousingCount);
         AssertEqual(false, earlyMiss.OverclockChip);
 
         ModuleCrafterMerchantOffer lateHit = ModuleCrafterRules.RollRetiredMerchantOffer(21, _ => 0);

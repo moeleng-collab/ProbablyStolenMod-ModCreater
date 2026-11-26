@@ -3,8 +3,8 @@
   <ID>module_crafter</ID>
   <Name>模组制造机</Name>
   <Author>ModuleCrafter</Author>
-  <ModVersion>2.1.6</ModVersion>
-  <Description>制造通用模组，并使用独立模组强化器进行 +0 至 +12 强化、触媒兑换与稳固夹保护。</Description>
+  <ModVersion>3.0.1</ModVersion>
+  <Description>新增模组制造商专精、28 种模组制造与强化、主题／通用双配方、通用制造组件、王尔德升级和旧存档迁移。</Description>
   <GameVersions>
     <Version>0.46D</Version>
   </GameVersions>

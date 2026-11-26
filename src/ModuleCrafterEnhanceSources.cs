@@ -132,17 +132,33 @@ internal static class ModuleCrafterEnhanceScavengePatch
 
     private static void Postfix(List<GameItem> __result)
     {
-        if (!ModuleCrafterEnhanceSources.IsActive || __result == null
-            || !ModuleCrafterRules.RollStock(ModuleCrafterEnhanceRules.ScavengeBonusChance, NextExclusive))
+        if (!ModuleCrafterEnhanceSources.IsActive || __result == null)
         {
             return;
         }
 
-        GameItem catalyst = DirectoryMaster.Item(ModuleCrafterIds.EnhanceCatalyst);
-        if (catalyst != null)
+        // Keep the catalyst roll first so existing scavenging random sequences stay unchanged.
+        if (ModuleCrafterRules.RollStock(ModuleCrafterEnhanceRules.ScavengeBonusChance, NextExclusive))
         {
-            __result.Add(catalyst);
-            ModuleCrafterMod.LogMsg("Enhancement catalyst added to scavenging results.");
+            GameItem catalyst = DirectoryMaster.Item(ModuleCrafterIds.EnhanceCatalyst);
+            if (catalyst != null)
+            {
+                __result.Add(catalyst);
+                ModuleCrafterMod.LogMsg("Enhancement catalyst added to scavenging results.");
+            }
+        }
+
+        string housingId = ModuleCrafterEnhanceRules.RollScavengedHousingId(NextExclusive);
+        if (housingId == null)
+        {
+            return;
+        }
+
+        GameItem housing = DirectoryMaster.Item(housingId);
+        if (housing != null)
+        {
+            __result.Add(housing);
+            ModuleCrafterMod.LogMsg("Damaged module housing added to scavenging results: " + housingId + ".");
         }
     }
 

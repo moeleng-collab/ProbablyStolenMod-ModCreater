@@ -54,6 +54,7 @@ public static class ModuleCrafterStock
             ModuleCrafterMod.LogMsg("Jackson listed " + ModuleCrafterRules.JacksonStockItemId(key) + ".");
         }
 
+        added += ModuleCrafterExpansionStock.PlaceJacksonStock();
         return added;
     }
 

@@ -27,13 +27,23 @@ public static class ModuleCrafterEnhancement
         {
             int level = ModuleCrafterEnhanceState.GetLevel(item);
             builder.AddLine(ModuleCrafterLocalization.T("tooltip_enhance_level", level), ignoreEmpty: true, RenderHandler.ColorPalette.LightGreen);
-            if (level < ModuleCrafterEnhanceRules.MaxLevel && ModuleCrafterEnhanceState.TryGetKind(item.identifier, out ModuleCrafterChipKind kind))
+            if (ModuleCrafterEnhanceState.TryGetKind(item.identifier, out ModuleCrafterChipKind kind))
             {
-                builder.AddLine(ModuleCrafterLocalization.T(
-                    "tooltip_enhance_next",
-                    ModuleCrafterEnhanceRules.SuccessPercent(level),
-                    ModuleCrafterEnhanceRules.GoldCost(kind, level),
-                    ModuleCrafterEnhanceRules.RequiredCatalysts(level)), ignoreEmpty: true, RenderHandler.ColorPalette.LightYellow);
+                if (ModuleCrafterExpansion.IsSpecialized(kind))
+                {
+                    builder.AddLine(ModuleCrafterLocalization.T(
+                        "tooltip_special_effect",
+                        ModuleCrafterLocalization.SpecialEffectSummary(kind, level)), ignoreEmpty: true, RenderHandler.ColorPalette.LightCyan);
+                }
+
+                if (level < ModuleCrafterEnhanceRules.MaxLevelFor(kind, ModuleCrafterNetworkUpgrades.IsPrecisionUnlocked()))
+                {
+                    builder.AddLine(ModuleCrafterLocalization.T(
+                        "tooltip_enhance_next",
+                        ModuleCrafterScenario.ApplySuccessBonus(ModuleCrafterEnhanceRules.SuccessPercent(level)),
+                        ModuleCrafterEnhanceRules.GoldCost(kind, level),
+                        ModuleCrafterEnhanceRules.RequiredCatalysts(level)), ignoreEmpty: true, RenderHandler.ColorPalette.LightYellow);
+                }
             }
         }
     }
@@ -59,9 +69,11 @@ public static class ModuleCrafterEnhancement
         }
 
         int level = ModuleCrafterEnhanceState.GetLevel(item);
-        if (level >= ModuleCrafterEnhanceRules.MaxLevel)
+        int maxLevel = ModuleCrafterEnhanceRules.MaxLevelFor(kind, ModuleCrafterNetworkUpgrades.IsPrecisionUnlocked());
+        if (level >= maxLevel)
         {
-            preview.SetText(ModuleCrafterLocalization.T("enhance_max") + StatPreview(item, level, level));
+            string key = maxLevel < ModuleCrafterEnhanceRules.MaxLevel ? "enhance_locked" : "enhance_max";
+            preview.SetText(ModuleCrafterLocalization.T(key) + StatPreview(item, level, level));
             return;
         }
 
@@ -71,11 +83,12 @@ public static class ModuleCrafterEnhancement
             "enhance_ready",
             level,
             level + 1,
-            ModuleCrafterEnhanceRules.SuccessPercent(level),
+            ModuleCrafterScenario.ApplySuccessBonus(ModuleCrafterEnhanceRules.SuccessPercent(level)),
             cost,
             catalysts,
             CountUnits(materials, ModuleCrafterIds.SafeguardClip))
             + StatPreview(item, level, level + 1)
+            + SpecialPreview(kind, level + 1)
             + BreakPreview(item, level)
             + FailurePreview(level, CountUnits(materials, ModuleCrafterIds.SafeguardClip) > 0);
 
@@ -102,7 +115,7 @@ public static class ModuleCrafterEnhancement
         }
 
         int from = ModuleCrafterEnhanceState.GetLevel(item);
-        if (!ModuleCrafterEnhanceRules.CanRequestEnhancement(true, false, false, false, from))
+        if (!ModuleCrafterEnhanceRules.CanRequestEnhancement(true, false, false, false, from, kind, ModuleCrafterNetworkUpgrades.IsPrecisionUnlocked()))
         {
             RefreshPreview(preview, materials);
             return false;
@@ -125,8 +138,13 @@ public static class ModuleCrafterEnhancement
             return false;
         }
 
-        PlayerStore.Instance.PayMoney(cost, false);
-        ConsumeUnits(materials, ModuleCrafterIds.EnhanceCatalyst, catalystCost);
+        // The perk waives payment only after normal affordability checks; it never bypasses them.
+        bool tinkererFree = ModuleCrafterEnhanceRules.RollTinkererFreeEnhance(StartingPerk.IsTinkerer(), NextExclusive);
+        if (!tinkererFree)
+        {
+            PlayerStore.Instance.PayMoney(cost, false);
+            ConsumeUnits(materials, ModuleCrafterIds.EnhanceCatalyst, catalystCost);
+        }
 
         bool success;
         if (machine.IsTag(ModuleCrafterMachine.ForceResultTag))
@@ -136,7 +154,7 @@ public static class ModuleCrafterEnhancement
         }
         else
         {
-            success = ModuleCrafterRules.RollSuccess(ModuleCrafterEnhanceRules.SuccessPercent(from), NextExclusive);
+            success = ModuleCrafterRules.RollSuccess(ModuleCrafterScenario.ApplySuccessBonus(ModuleCrafterEnhanceRules.SuccessPercent(from)), NextExclusive);
         }
 
         bool hasClip = CountUnits(materials, ModuleCrafterIds.SafeguardClip) > 0;
@@ -145,17 +163,20 @@ public static class ModuleCrafterEnhancement
         if (result.Kind == ModuleCrafterEnhanceResultKind.Ruined)
         {
             visualTarget = ReplaceWithRuined(item);
-            GiveUnits(materials, ModuleCrafterIds.EnhanceCatalyst, result.RefundCatalysts);
+            GiveUnits(materials, ModuleCrafterIds.EnhanceCatalyst,
+                ModuleCrafterEnhanceRules.CatalystRefund(result, tinkererFree));
         }
         else
         {
-            ConsumeUnits(materials, ModuleCrafterIds.SafeguardClip, result.ConsumeSafeguardClips);
+            ConsumeUnits(materials, ModuleCrafterIds.SafeguardClip,
+                ModuleCrafterEnhanceRules.SafeguardClipConsumption(result, tinkererFree));
             ModuleCrafterEnhanceState.SetLevel(item, result.ToLevel);
         }
 
         ModuleCrafterEnhanceVisuals.Play(machine, visualTarget, result);
         ModuleCrafterEnhanceAudio.Play(result.Kind);
-        ModuleCrafterMod.LogMsg("Enhance " + kind + " from " + from + " => " + result.Kind + " to " + result.ToLevel + ".");
+        ModuleCrafterMod.LogMsg("Enhance " + kind + " from " + from + " => " + result.Kind + " to " + result.ToLevel
+            + (tinkererFree ? "; Tinkerer waived gold and material consumption." : "."));
         if (preview != null)
         {
             preview.SetText(ModuleCrafterLocalization.T(ResultKey(result.Kind), from, result.ToLevel) + ExchangeSuffix(materials));
@@ -366,6 +387,21 @@ public static class ModuleCrafterEnhancement
         int remaining = GraphUtils.TryAcceptAll(inventory, item);
         inventory.mayInventoryAddItemFunc = previous;
         return remaining == 0;
+    }
+
+    private static string SpecialPreview(ModuleCrafterChipKind kind, int nextLevel)
+    {
+        if (!ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            return "";
+        }
+
+        int currentLevel = Math.Max(0, nextLevel - 1);
+        string current = ModuleCrafterLocalization.SpecialEffectSummary(kind, currentLevel);
+        string next = ModuleCrafterLocalization.SpecialEffectSummary(kind, nextLevel);
+        return ModuleCrafterSpecialEffectRules.StageForLevel(currentLevel) != ModuleCrafterSpecialEffectRules.StageForLevel(nextLevel)
+            ? ModuleCrafterLocalization.T("effect_next", current, next)
+            : ModuleCrafterLocalization.T("effect_current", next);
     }
 
     private static string StatPreview(GameItem item, int currentLevel, int nextLevel)

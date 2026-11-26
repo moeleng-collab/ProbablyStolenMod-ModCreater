@@ -11,7 +11,26 @@ public enum ModuleCrafterChipKind
     Fineness,
     Streamlining,
     NeuralCapped,
-    NeuralUncapped
+    NeuralUncapped,
+    FarmNutrifruit,
+    FarmDreamCap,
+    FarmKottonLoom,
+    FarmFillerweed,
+    FarmHydroreed,
+    EvaporatorSolventRecovery,
+    ChemEquipment,
+    FurnaceJunk,
+    PrinterMetal,
+    PrinterMeleeBatch,
+    DnaStabilizer,
+    DnaPositiveFilter,
+    DnaNegativeFilter,
+    FurnaceBlast,
+    FarmNightmareCap,
+    FarmSmuggler,
+    PrinterCnc,
+    DnaPrecision,
+    AlarmTransmitter
 }
 
 public enum ModuleCrafterTier
@@ -19,7 +38,10 @@ public enum ModuleCrafterTier
     Common,
     Advanced,
     NeuralCapped,
-    NeuralUncapped
+    NeuralUncapped,
+    Specialized,
+    Precision,
+    Prototype
 }
 
 public enum ModuleCrafterFailureOutput
@@ -77,7 +99,8 @@ public sealed class ModuleCrafterRecipe
         int baseSuccessPercent,
         int softCapPercent,
         int failureCorruptPercent,
-        ModuleCrafterMaterialNeed[] required)
+        ModuleCrafterMaterialNeed[] required,
+        ModuleCrafterMaterialNeed[] universalRequired = null)
     {
         Kind = kind;
         Tier = tier;
@@ -86,15 +109,18 @@ public sealed class ModuleCrafterRecipe
         SoftCapPercent = softCapPercent;
         FailureCorruptPercent = failureCorruptPercent;
         Required = required;
+        UniversalRequired = universalRequired;
     }
 
     public ModuleCrafterChipKind Kind { get; }
     public ModuleCrafterTier Tier { get; }
     public int BaseNights { get; }
+    public int Workload => BaseNights * ModuleCrafterRules.DefaultBaseProcessingSpeed;
     public int BaseSuccessPercent { get; }
     public int SoftCapPercent { get; }
     public int FailureCorruptPercent { get; }
     public ModuleCrafterMaterialNeed[] Required { get; }
+    public ModuleCrafterMaterialNeed[] UniversalRequired { get; }
 }
 
 
@@ -227,6 +253,11 @@ public static class ModuleCrafterIds
 
     public static string Chip(ModuleCrafterChipKind kind)
     {
+        if (ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            return ModuleCrafterExpansion.Chip(kind);
+        }
+
         return kind switch
         {
             ModuleCrafterChipKind.Performance => ChipPrefix + "performance",
@@ -259,6 +290,11 @@ public static class ModuleCrafterIds
 
     public static string OutputModule(ModuleCrafterChipKind kind)
     {
+        if (ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            return ModuleCrafterExpansion.OutputModule(kind);
+        }
+
         return kind switch
         {
             ModuleCrafterChipKind.Performance => Performance,
@@ -283,6 +319,7 @@ public struct ModuleCrafterMerchantOffer
     public int TicketCount;
     public int ElectronicCount;
     public int CorruptHousingCount;
+    public int RuinedHousingCount;
     public bool PerformanceChip;
     public bool EfficiencyChip;
     public bool QualityChip;
@@ -359,6 +396,11 @@ public static class ModuleCrafterRules
 
     public static ModuleCrafterRecipe GetRecipe(ModuleCrafterChipKind kind)
     {
+        if (ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            return ModuleCrafterExpansion.GetRecipe(kind);
+        }
+
         return kind switch
         {
             ModuleCrafterChipKind.Performance => Common(kind),
@@ -416,6 +458,46 @@ public static class ModuleCrafterRules
         int target = baseSpeed * nights;
         int actual = (target + currentSpeed - 1) / currentSpeed;
         return Math.Max(MinNights, actual);
+    }
+
+    public static int GetWorkload(ModuleCrafterChipKind kind)
+    {
+        return GetRecipe(kind).Workload;
+    }
+
+    public static int ComputeActualNightsForWorkload(int workload, int currentSpeed)
+    {
+        int effectiveSpeed = currentSpeed > 0 ? currentSpeed : DefaultBaseProcessingSpeed;
+        int actual = (Math.Max(0, workload) + effectiveSpeed - 1) / effectiveSpeed;
+        return Math.Max(MinNights, actual);
+    }
+
+    // Matches ModuleHelper.ApplyBasicModuleEffect for this machine's power draw.
+    public static int ComputeWorkingPowerDraw(
+        int basePower,
+        int efficiencyPercent,
+        int efficiencyRatio = 0,
+        int performancePercent = 0,
+        int performanceRatio = 0,
+        bool performanceReducesPower = false)
+    {
+        int power = basePower - basePower * efficiencyPercent / 100;
+        if (efficiencyRatio > 0)
+        {
+            power = (int)(basePower - (float)(basePower * efficiencyPercent / efficiencyRatio) / 100f);
+        }
+
+        if (performanceReducesPower && performanceRatio > 0)
+        {
+            power -= (int)((float)(basePower * performancePercent / performanceRatio) / 100f);
+        }
+
+        return Math.Max(1, power);
+    }
+
+    public static int GetPowerDrawForBilling(bool isWorking, bool outputBlocked, int workingPowerDraw)
+    {
+        return isWorking && !outputBlocked ? Math.Max(0, workingPowerDraw) : 0;
     }
 
     public static bool CanStart(bool hasRequiredMaterials, bool isPowered)
@@ -630,6 +712,11 @@ public static class ModuleCrafterRules
 
     public static int ChipUnitValue(ModuleCrafterChipKind kind)
     {
+        if (ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            return ModuleCrafterExpansion.ChipUnitValue(kind);
+        }
+
         return GetRecipe(kind).Tier switch
         {
             ModuleCrafterTier.Common => CommonChipUnitValue,
@@ -675,7 +762,8 @@ public static class ModuleCrafterRules
             || itemId == ModuleCrafterIds.RefundTicket
             || itemId == ModuleCrafterIds.RefundCore
             || IsIntactHousingId(itemId)
-            || IsDamagedHousingId(itemId);
+            || IsDamagedHousingId(itemId)
+            || ModuleCrafterExpansion.IsCraftMaterial(itemId);
     }
 
     public static bool IsRefundItem(string itemId)
@@ -844,11 +932,22 @@ public static class ModuleCrafterRules
 
     public static ModuleCrafterMaterialPlan PlanMaterials(ModuleCrafterChipKind kind, System.Collections.Generic.IReadOnlyList<string> itemIds)
     {
+        return PlanMaterials(kind, itemIds, ModuleCrafterRecipeVariant.Legacy);
+    }
+
+    public static ModuleCrafterMaterialPlan PlanMaterials(
+        ModuleCrafterChipKind kind,
+        System.Collections.Generic.IReadOnlyList<string> itemIds,
+        ModuleCrafterRecipeVariant variant)
+    {
         ModuleCrafterRecipe recipe = GetRecipe(kind);
+        ModuleCrafterMaterialNeed[] required = variant == ModuleCrafterRecipeVariant.Universal && recipe.UniversalRequired != null
+            ? recipe.UniversalRequired
+            : recipe.Required;
         bool[] used = new bool[itemIds.Count];
         System.Collections.Generic.List<int> consumed = new System.Collections.Generic.List<int>();
 
-        foreach (ModuleCrafterMaterialNeed need in recipe.Required)
+        foreach (ModuleCrafterMaterialNeed need in required)
         {
             int remaining = need.Count;
             if (need.AllowCorruptOrRuinedHousing)
@@ -932,6 +1031,7 @@ public static class ModuleCrafterRules
             TicketCount = RetiredMerchantBaseTickets,
             ElectronicCount = RetiredMerchantBaseElectronics,
             CorruptHousingCount = RetiredMerchantBaseHousing,
+            RuinedHousingCount = RetiredMerchantBaseHousing,
             PerformanceChip = true,
             EfficiencyChip = true,
             QualityChip = true
@@ -965,6 +1065,12 @@ public static class ModuleCrafterRules
             offer.NeuralCappedChip = RollRetiredMerchantPity(pity.NeuralCappedMisses, nextExclusive, out nextPity.NeuralCappedMisses);
             offer.NeuralUncappedChip = RollRetiredMerchantPity(pity.NeuralUncappedMisses, nextExclusive, out nextPity.NeuralUncappedMisses);
             offer.RefundCore = RollRetiredMerchantPity(pity.RefundCoreMisses, nextExclusive, out nextPity.RefundCoreMisses);
+        }
+
+        // Append the new roll after every legacy roll so existing stock sequences stay stable.
+        if (RollStock(RetiredMerchantExtraHousingChance, nextExclusive))
+        {
+            offer.RuinedHousingCount++;
         }
 
         return offer;
@@ -1009,6 +1115,11 @@ public static class ModuleCrafterRules
         }
 
         return sourceAcceptsMachine == true || sourceThisAcceptsMachine == true;
+    }
+
+    public static bool ShouldAllowTurboBoost(bool isTurboBooster, bool isWorking, bool outputOccupied, bool canPower)
+    {
+        return !isTurboBooster || (isWorking && !outputOccupied && canPower);
     }
 
     private static ModuleCrafterRecipe Common(ModuleCrafterChipKind kind)

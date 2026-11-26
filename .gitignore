@@ -12,3 +12,4 @@ tests/*.dll
 tests/*.pdb
 tests/*.runtimeconfig.json
 handoff/
+design-review/

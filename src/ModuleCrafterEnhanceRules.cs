@@ -81,12 +81,42 @@ public static class ModuleCrafterEnhanceRules
     public const int GenericSellerChance = 25;
     public const int CharacterSellerChance = 15;
     public const int ScavengeBonusChance = 8;
+    public const int ScavengeHousingChance = 20;
+    public const int ScavengeCorruptShareChance = 50;
+    public const int TinkererFreeEnhanceChance = 20;
     public const int ResultFrameMilliseconds = 120;
     public const int MaxLevelFrameMilliseconds = 500;
 
     public static bool CanStackSupplies(string firstId, string secondId, bool firstOwned, bool secondOwned)
     {
         return !string.IsNullOrEmpty(firstId) && firstId == secondId && firstOwned == secondOwned;
+    }
+
+    public static string RollScavengedHousingId(Func<int, int> nextExclusive)
+    {
+        if (!ModuleCrafterRules.RollStock(ScavengeHousingChance, nextExclusive))
+        {
+            return null;
+        }
+
+        return ModuleCrafterRules.RollStock(ScavengeCorruptShareChance, nextExclusive)
+            ? ModuleCrafterIds.Corrupt
+            : ModuleCrafterIds.Ruined;
+    }
+
+    public static bool RollTinkererFreeEnhance(bool hasTinkerer, Func<int, int> nextExclusive)
+    {
+        return hasTinkerer && ModuleCrafterRules.RollStock(TinkererFreeEnhanceChance, nextExclusive);
+    }
+
+    public static int CatalystRefund(ModuleCrafterEnhanceResult result, bool tinkererFree)
+    {
+        return tinkererFree ? 0 : result.RefundCatalysts;
+    }
+
+    public static int SafeguardClipConsumption(ModuleCrafterEnhanceResult result, bool tinkererFree)
+    {
+        return tinkererFree ? 0 : result.ConsumeSafeguardClips;
     }
 
     private static readonly int[] PositiveNumerators = { 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 24, 28 };
@@ -97,16 +127,39 @@ public static class ModuleCrafterEnhanceRules
     private static readonly int[] AdvancedCosts = { 20, 20, 20, 20, 20, 20, 20, 20, 27, 36, 55, 91 };
     private static readonly int[] CappedCosts = { 35, 35, 35, 35, 35, 35, 35, 35, 48, 64, 95, 159 };
     private static readonly int[] UncappedCosts = { 23, 23, 23, 30, 38, 45, 60, 83, 113, 150, 225, 375 };
-    private static readonly int[] LevelPricePercents = { 100, 103, 106, 109, 112, 116, 120, 124, 130, 136, 142, 150, 160 };
+    private static readonly int[] SpecializedCosts = { 20, 20, 20, 20, 20, 20, 20, 20, 27, 36, 55, 91 };
+    private static readonly int[] PrecisionCosts = { 35, 35, 35, 35, 35, 35, 35, 35, 48, 64, 95, 159 };
+    private static readonly int[] PrototypeCosts = { 50, 50, 50, 50, 50, 50, 50, 50, 75, 100, 150, 250 };
+    // High levels must pay back their gold/catalyst cost and part of the risk.
+    // Fixed item-effect modifiers remain additive after this multiplier.
+    private static readonly int[] LevelPricePercents = { 100, 110, 120, 135, 150, 170, 195, 225, 260, 305, 365, 440, 560 };
 
     public static int ClampLevel(int level)
     {
         return Math.Clamp(level, 0, MaxLevel);
     }
 
+    public static int MaxLevelFor(ModuleCrafterChipKind kind, bool precisionUnlocked)
+    {
+        return ModuleCrafterExpansion.IsSpecialized(kind) && !precisionUnlocked ? 8 : MaxLevel;
+    }
+
     public static bool CanRequestEnhancement(bool intactSupportedModule, bool installed, bool crafting, bool outputOccupied, int fromLevel)
     {
         return intactSupportedModule && !installed && !crafting && !outputOccupied && fromLevel >= 0 && fromLevel < MaxLevel;
+    }
+
+    public static bool CanRequestEnhancement(
+        bool intactSupportedModule,
+        bool installed,
+        bool crafting,
+        bool outputOccupied,
+        int fromLevel,
+        ModuleCrafterChipKind kind,
+        bool precisionUnlocked)
+    {
+        return CanRequestEnhancement(intactSupportedModule, installed, crafting, outputOccupied, fromLevel)
+            && fromLevel < MaxLevelFor(kind, precisionUnlocked);
     }
 
     public static int EnhancePositive(int baseValue, int level)
@@ -189,20 +242,28 @@ public static class ModuleCrafterEnhanceRules
             ModuleCrafterTier.Advanced => AdvancedCosts[fromLevel],
             ModuleCrafterTier.NeuralCapped => CappedCosts[fromLevel],
             ModuleCrafterTier.NeuralUncapped => UncappedCosts[fromLevel],
+            ModuleCrafterTier.Specialized => SpecializedCosts[fromLevel],
+            ModuleCrafterTier.Precision => PrecisionCosts[fromLevel],
+            ModuleCrafterTier.Prototype => PrototypeCosts[fromLevel],
             _ => 0
         };
     }
 
     public static int DesignFormulaGoldCost(ModuleCrafterChipKind kind, int fromLevel)
     {
-        int coefficient = CoefficientThousands[Math.Clamp(fromLevel, 0, 11)];
         ModuleCrafterTier tier = ModuleCrafterRules.GetRecipe(kind).Tier;
+        if (tier == ModuleCrafterTier.Prototype)
+        {
+            return PrototypeCosts[Math.Clamp(fromLevel, 0, 11)];
+        }
+
+        int coefficient = CoefficientThousands[Math.Clamp(fromLevel, 0, 11)];
         if (tier == ModuleCrafterTier.NeuralUncapped)
         {
             return (int)RoundAwayFromZero(1500 * coefficient, 1000);
         }
 
-        int baseCost = tier == ModuleCrafterTier.Common ? 10 : tier == ModuleCrafterTier.Advanced ? 20 : 35;
+        int baseCost = tier == ModuleCrafterTier.Common ? 10 : tier == ModuleCrafterTier.Advanced || tier == ModuleCrafterTier.Specialized ? 20 : 35;
         if (fromLevel <= 7)
         {
             return baseCost;
@@ -243,6 +304,14 @@ public static class ModuleCrafterEnhanceRules
 
     public static int BaseCatalogPrice(string itemId)
     {
+        foreach (ModuleCrafterChipKind kind in (ModuleCrafterChipKind[])Enum.GetValues(typeof(ModuleCrafterChipKind)))
+        {
+            if (ModuleCrafterExpansion.IsSpecialized(kind) && ModuleCrafterIds.OutputModule(kind) == itemId)
+            {
+                return ModuleCrafterExpansion.BaseCatalogPrice(kind);
+            }
+        }
+
         if (itemId == ModuleCrafterIds.NeuralUncapped)
         {
             return 1500;
@@ -308,9 +377,20 @@ public static class ModuleCrafterEnhanceRules
     {
         int basePrice = BaseCatalogPrice(itemId);
         long shaped = RoundAwayFromZero(basePrice * ShapePricePercent(spritePath), 100);
-        long leveled = RoundAwayFromZero(shaped * LevelPricePercents[ClampLevel(level)], 100);
+        return CatalogValueFromBase(shaped, level, firstEffect, secondEffect, masterUnlocked: false);
+    }
+
+    public static long CatalogValueFromBase(long baseValue, int level, string firstEffect, string secondEffect, bool masterUnlocked)
+    {
+        long leveled = RoundAwayFromZero(baseValue * LevelPricePercents[ClampLevel(level)], 100);
         long value = leveled + FixedEffectValue(firstEffect) + FixedEffectValue(secondEffect);
-        return Math.Max(1L, value);
+        value = Math.Max(1L, value);
+        if (masterUnlocked && ClampLevel(level) >= 1)
+        {
+            value = Math.Max(1L, RoundAwayFromZero(value * 110, 100));
+        }
+
+        return value;
     }
 
     public static int LearningCap(int unenhancedBase, int level)

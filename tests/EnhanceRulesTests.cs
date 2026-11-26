@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 
 internal static class EnhanceRulesTests
@@ -11,6 +12,7 @@ internal static class EnhanceRulesTests
         LearningAndDegradation();
         SoftCapsAndExchange();
         SourcesAndAnimation();
+        TinkererFreeEnhancement();
         PhaseOneConstantsStayFrozen();
         SupplyStacksKeepOwnershipSeparated();
     }
@@ -98,12 +100,28 @@ internal static class EnhanceRulesTests
         Equal(64, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance_l", 0, null, null));
         Equal(60, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance_c", 0, null, null));
         Equal(115, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Overclock, "overclock_s", 0, null, null));
-        Equal(112, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 12, null, null));
-        Equal(152, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 12, "MODULE_EFFECT_PREMIUM", null));
+        Equal(256, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 10, null, null));
+        Equal(308, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 11, null, null));
+        Equal(52, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 11, null, null)
+            - ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 10, null, null));
+        Equal(392, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 12, null, null));
+        Equal(432, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 12, "MODULE_EFFECT_PREMIUM", null));
         Equal(85, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Streamlining, "streamlining", 0, "MODULE_EFFECT_INFERIOR", null));
         Equal(100, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance", 0, "MODULE_EFFECT_RECEIVER", "MODULE_EFFECT_TOP_MOUNT"));
-        Equal(2400, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.NeuralUncapped, "uncapped", 12, null, null));
+        Equal(8400, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.NeuralUncapped, "uncapped", 12, null, null));
+        Equal(616, ModuleCrafterEnhanceRules.CatalogValueFromBase(100, 12, null, null, masterUnlocked: true));
+        Equal(100, ModuleCrafterEnhanceRules.CatalogValueFromBase(100, 0, null, null, masterUnlocked: true));
         Equal(1, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.Performance, "performance_c", 0, "MODULE_EFFECT_INFERIOR", null) - 19);
+        foreach (ModuleCrafterChipKind kind in (ModuleCrafterChipKind[])Enum.GetValues(typeof(ModuleCrafterChipKind)))
+        {
+            if (ModuleCrafterExpansion.IsSpecialized(kind))
+            {
+                Equal(ModuleCrafterExpansion.BaseCatalogPrice(kind),
+                    ModuleCrafterEnhanceRules.BaseCatalogPrice(ModuleCrafterIds.OutputModule(kind)));
+            }
+        }
+        Equal(150, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.OutputModule(ModuleCrafterChipKind.FurnaceBlast), "farm_module_l8", 0, null, null));
+        Equal(840, ModuleCrafterEnhanceRules.CatalogValue(ModuleCrafterIds.OutputModule(ModuleCrafterChipKind.FurnaceBlast), "farm_module_l8", 12, null, null));
     }
 
     private static void LearningAndDegradation()
@@ -154,6 +172,17 @@ internal static class EnhanceRulesTests
         Equal(true, ModuleCrafterEnhanceRules.SellerItemsAreStolen("pettyThief"));
         Equal(false, ModuleCrafterEnhanceRules.SellerItemsAreStolen("scavenger"));
         Equal(8, ModuleCrafterEnhanceRules.ScavengeBonusChance);
+        Equal(20, ModuleCrafterEnhanceRules.ScavengeHousingChance);
+        Equal(50, ModuleCrafterEnhanceRules.ScavengeCorruptShareChance);
+        int housingRolls = 0;
+        Equal(ModuleCrafterIds.Corrupt, ModuleCrafterEnhanceRules.RollScavengedHousingId(Sequence(() => housingRolls++, 19, 49)));
+        Equal(2, housingRolls);
+        housingRolls = 0;
+        Equal(ModuleCrafterIds.Ruined, ModuleCrafterEnhanceRules.RollScavengedHousingId(Sequence(() => housingRolls++, 19, 50)));
+        Equal(2, housingRolls);
+        housingRolls = 0;
+        Equal((object)null, ModuleCrafterEnhanceRules.RollScavengedHousingId(Sequence(() => housingRolls++, 20, 0)));
+        Equal(1, housingRolls);
         Equal(120, ModuleCrafterEnhanceRules.ResultFrameMilliseconds);
         Equal(500, ModuleCrafterEnhanceRules.MaxLevelFrameMilliseconds);
         Equal(6, ModuleCrafterEnhanceRules.ResultFrameCount(ModuleCrafterEnhanceResultKind.Success));
@@ -167,6 +196,34 @@ internal static class EnhanceRulesTests
         Equal("module_crafter_enhance_ruined", ModuleCrafterEnhanceRules.ResultSoundKey(ModuleCrafterEnhanceResultKind.Ruined));
         Equal("module_crafter_enhance_failure", ModuleCrafterEnhanceRules.ResultSoundKey(ModuleCrafterEnhanceResultKind.SafeguardReset));
         VanillaCapPreview();
+    }
+
+    private static Func<int, int> Sequence(Action onCall, params int[] values)
+    {
+        int index = 0;
+        return _ =>
+        {
+            onCall();
+            return values[Math.Min(index++, values.Length - 1)];
+        };
+    }
+
+    private static void TinkererFreeEnhancement()
+    {
+        Equal(20, ModuleCrafterEnhanceRules.TinkererFreeEnhanceChance);
+        int calls = 0;
+        Equal(false, ModuleCrafterEnhanceRules.RollTinkererFreeEnhance(false, _ => { calls++; return 0; }));
+        Equal(0, calls);
+        Equal(true, ModuleCrafterEnhanceRules.RollTinkererFreeEnhance(true, _ => 19));
+        Equal(false, ModuleCrafterEnhanceRules.RollTinkererFreeEnhance(true, _ => 20));
+
+        var ruined = ModuleCrafterEnhanceRules.ResolveFailure(11, false);
+        Equal(1, ModuleCrafterEnhanceRules.CatalystRefund(ruined, false));
+        Equal(0, ModuleCrafterEnhanceRules.CatalystRefund(ruined, true));
+        var clipped = ModuleCrafterEnhanceRules.ResolveFailure(11, true);
+        Equal(1, ModuleCrafterEnhanceRules.SafeguardClipConsumption(clipped, false));
+        Equal(0, ModuleCrafterEnhanceRules.SafeguardClipConsumption(clipped, true));
+        Equal(0, ModuleCrafterEnhanceRules.CatalystRefund(ModuleCrafterEnhanceRules.Resolve(true, 8, false), false));
     }
 
     private static void VanillaCapPreview()

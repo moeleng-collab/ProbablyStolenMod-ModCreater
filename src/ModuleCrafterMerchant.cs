@@ -107,6 +107,7 @@ public static class ModuleCrafterMerchant
             + nextPity.RefundCoreMisses + " misses.");
         int placed = PlaceOffer(offer);
         placed += ModuleCrafterEnhanceSources.PlaceEnhancementStock(day);
+        placed += ModuleCrafterExpansionStock.PlaceRetiredStock();
         return placed;
     }
 
@@ -155,15 +156,8 @@ public static class ModuleCrafterMerchant
             added += AddCopies(ModuleCrafterIds.Chip(ModuleCrafterChipKind.Streamlining), 1);
         }
 
-        if (offer.NeuralCappedChip)
-        {
-            added += AddCopies(ModuleCrafterIds.Chip(ModuleCrafterChipKind.NeuralCapped), 1);
-        }
-
-        if (offer.NeuralUncappedChip)
-        {
-            added += AddCopies(ModuleCrafterIds.Chip(ModuleCrafterChipKind.NeuralUncapped), 1);
-        }
+        // 3.0: neural recipe chips are contraband and no longer appear in this
+        // ordinary merchant's stock. Existing rolls/pity state remain unchanged.
 
         if (offer.RefundCore)
         {
@@ -173,6 +167,7 @@ public static class ModuleCrafterMerchant
         added += AddCopies(ModuleCrafterIds.RefundTicket, offer.TicketCount);
         added += AddCopies(ModuleCrafterIds.Electronic, offer.ElectronicCount);
         added += AddCopies(ModuleCrafterIds.Corrupt, offer.CorruptHousingCount);
+        added += AddCopies(ModuleCrafterIds.Ruined, offer.RuinedHousingCount);
         ModuleCrafterMod.LogMsg("Retired module merchant placed " + added + " item(s).");
         return added;
     }

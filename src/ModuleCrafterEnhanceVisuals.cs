@@ -191,9 +191,12 @@ public static class ModuleCrafterEnhanceVisuals
         {
             if (level >= 9)
             {
-                string suffix = ShapeSuffix(item);
                 string blink = level == 12 && ((int)(Time.unscaledTimeAsDouble * 1000.0 / ModuleCrafterEnhanceRules.MaxLevelFrameMilliseconds) % 2 == 1) ? "_b" : "";
-                Sprite overlay = LoadSprite("module_enhance_overlay_plus_" + level.ToString("00") + "_" + suffix + blink);
+                bool specialized = ModuleCrafterEnhanceState.TryGetKind(item.identifier, out ModuleCrafterChipKind kind)
+                    && ModuleCrafterExpansion.IsSpecialized(kind);
+                Sprite overlay = specialized
+                    ? LoadSprite(SpecializedOverlayKey(kind, level, blink))
+                    : LoadSprite("module_enhance_overlay_plus_" + level.ToString("00") + "_" + ShapeSuffix(item) + blink);
                 if (overlay != null)
                 {
                     modifiers.Add(new ItemSpriteModifier(overlay, Vector2.zero, priority: 200));
@@ -201,11 +204,7 @@ public static class ModuleCrafterEnhanceVisuals
             }
             else
             {
-                Sprite badge = LoadSprite("module_enhance_badge_plus_" + level.ToString("00"));
-                if (badge != null)
-                {
-                    modifiers.Add(new ItemSpriteModifier(badge, new Vector2(BaseWidth(item) - badge.rect.width - 4f, -4f), priority: 200));
-                }
+                AddBadge(item, level, modifiers);
             }
         }
 
@@ -341,6 +340,30 @@ public static class ModuleCrafterEnhanceVisuals
         return sprite;
     }
 
+    private static void AddBadge(GameItem item, int level, List<ItemSpriteModifier> modifiers)
+    {
+        Sprite badge = LoadSprite("module_enhance_badge_plus_" + level.ToString("00"));
+        if (badge != null)
+        {
+            modifiers.Add(new ItemSpriteModifier(badge, new Vector2(BaseWidth(item) - badge.rect.width - 4f, -4f), priority: 210));
+        }
+    }
+
+    private static string SpecializedOverlayKey(ModuleCrafterChipKind kind, int level, string blink)
+    {
+        const string chipPrefix = "module_crafter_chip_";
+        string chipId = ModuleCrafterIds.Chip(kind);
+        string kindKey = chipId.StartsWith(chipPrefix, StringComparison.Ordinal)
+            ? chipId.Substring(chipPrefix.Length)
+            : kind.ToString().ToLowerInvariant();
+        return kindKey + "_plus_" + level.ToString("00") + blink;
+    }
+
+    private static int GridSize()
+    {
+        return UISettings.current != null ? Math.Max(1, UISettings.current.gridSize) : 16;
+    }
+
     private static string FxPrefix(ModuleCrafterEnhanceResultKind kind)
     {
         return kind switch
@@ -371,12 +394,24 @@ public static class ModuleCrafterEnhanceVisuals
 
     private static int BaseWidth(GameItem item)
     {
+        if (ModuleCrafterEnhanceState.TryGetKind(item.identifier, out ModuleCrafterChipKind kind)
+            && ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            return Math.Max(1, item.shape.width) * GridSize();
+        }
+
         // Vanilla atlas: L is 48x32; T is 32x48.
         return ShapeSuffix(item) == "l" ? 48 : 32;
     }
 
     private static int BaseHeight(GameItem item)
     {
+        if (ModuleCrafterEnhanceState.TryGetKind(item.identifier, out ModuleCrafterChipKind kind)
+            && ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            return Math.Max(1, item.shape.height) * GridSize();
+        }
+
         string shape = ShapeSuffix(item);
         return shape == "t" || shape == "s" || shape == "h" ? 48 : 32;
     }

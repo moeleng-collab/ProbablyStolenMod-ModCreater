@@ -44,6 +44,71 @@ public static class ModuleCrafterLocalization
             "machine_name" => "Module Crafter",
             "machine_desc" => "Crafts universal modules from a recipe chip and materials overnight.",
             "machine_flavor" => "A boxy fabricator with a chip bay on top and a module clamp inside.",
+            "scenario_name" => "Module Manufacturer",
+            "scenario_desc" => "You once made a living dismantling and rebuilding machine modules, and you know how to find usable components in scrap. You arrive with your own fabricator, ready to turn broken modules into a stable business.",
+            "scenario_advanced" => "Advanced start",
+            "scenario_gear_machine" => "Module Crafter ×1",
+            "scenario_gear_chip" => "Performance Recipe Chip ×1",
+            "scenario_gear_scav" => "+{0} scavenging attempts per visit",
+            "scenario_gear_craft" => "+{0}% crafting success",
+            "scenario_gear_enhance" => "+{0}% enhancement success",
+            "component_name" => "Universal Fabrication Component",
+            "component_desc" => "A packaged substitute for specialist materials. Used by universal recipes; stackable.",
+            "component_flavor" => "No greenhouse, laboratory, printer, or permit required—just a supplier and enough cash.",
+            "variant_themed" => "Recipe: Themed",
+            "variant_universal" => "Recipe: Universal",
+            "kind_farmnutrifruit" => "Nutrifruit Hydroponic",
+            "kind_farmdreamcap" => "Dream Cap Neutralizer",
+            "kind_farmkottonloom" => "Kotton Auto Loom",
+            "kind_farmfillerweed" => "Fillerweed Production",
+            "kind_farmhydroreed" => "Hydroreed Filter",
+            "kind_evaporatorsolventrecovery" => "Solvent Recovery",
+            "kind_chemequipment" => "Chemical Equipment",
+            "kind_furnacejunk" => "Junk Processing Furnace",
+            "kind_printermetal" => "Metal Printer",
+            "kind_printermeleebatch" => "Melee Batch Printer",
+            "kind_dnastabilizer" => "Genetic Stabilizer",
+            "kind_dnapositivefilter" => "Positive Trait Filter",
+            "kind_dnanegativefilter" => "Negative Trait Filter",
+            "kind_furnaceblast" => "Blast Furnace",
+            "kind_farmnightmarecap" => "Dream Cap Nightmare",
+            "kind_farmsmuggler" => "Hydroponic Smuggler",
+            "kind_printercnc" => "CNC",
+            "kind_dnaprecision" => "Precision Extraction",
+            "kind_alarmtransmitter" => "Alarm Transmitter",
+            "network_tab" => "Module Crafting",
+            "network_MODULE_CRAFTER_SUPPLY_title" => "Module Supply Network",
+            "network_MODULE_CRAFTER_SUPPLY_desc" => "Order two legal specialized recipe chips per rotation. Immediately receive one legal specialized chip.",
+            "network_MODULE_CRAFTER_WORKSHOP_title" => "Workshop Upgrade",
+            "network_MODULE_CRAFTER_WORKSHOP_desc" => "Receive a Module Enhancer and 3 catalysts. Adds one legal chip order slot.",
+            "network_MODULE_CRAFTER_BLACK_MARKET_title" => "Black Market Recipe Channel",
+            "network_MODULE_CRAFTER_BLACK_MARKET_desc" => "Order one contraband recipe chip per week at 150% of its base value. Existing black market stock is unchanged.",
+            "network_MODULE_CRAFTER_PRECISION_title" => "Precision Enhancement Process",
+            "network_MODULE_CRAFTER_PRECISION_desc" => "Raises specialized module enhancement from +8 to +12 and unlocks special effects at +10 and +12. Receive 1 stabilizing clip.",
+            "network_MODULE_CRAFTER_MASTER_title" => "Module Manufacturing Master",
+            "network_MODULE_CRAFTER_MASTER_desc" => "Enhanced modules at +1 or higher sell for 10% more. Adds one legal and one contraband chip order slot.",
+            "enhance_locked" => "Precision Enhancement Process required: specialized modules are capped at +8. Unlock it in Wild's Network.",
+            "effect_next" => "\nSpecial effect: {0} → {1}.",
+            "effect_current" => "\nSpecial effect: {0}; unchanged at the next level.",
+            "tooltip_special_effect" => "Special effect: {0}",
+            "effect_yield" => "yield bonus +{0}",
+            "effect_extra_output" => "bonus output +{0}",
+            "effect_recovery" => "solvent recovery +{0}%",
+            "effect_quality" => "quality bonus +{0}",
+            "effect_junk_output" => "{0} scrap metal per conversion",
+            "effect_melee_output" => "{0} melee weapon(s) per print",
+            "effect_stabilizer" => "target preserved; disk retention {0}%",
+            "effect_extra_traits" => "extra trait extractions +{0}",
+            "effect_blast_output" => "{0} metal ingots per conversion",
+            "effect_purity_bonus" => ", no purity penalty",
+            "effect_smuggler_0" => "removes contraband from growing seeds",
+            "effect_smuggler_1" => "also removes contraband from harvested crops",
+            "effect_smuggler_2" => "removes contraband from all outputs",
+            "effect_cnc" => "chip workload -{0}%",
+            "effect_precision_0" => "precision trait selection",
+            "effect_precision_1" => "precision selection and target preservation",
+            "effect_precision_2" => "precision selection, target and disk preservation",
+            "effect_alarm" => "reputation +{0} per trigger",
             "chip_name" => "{0} Recipe Chip",
             "chip_desc" => "Reusable. Insert into the Module Crafter to start a job.",
             "mat_housing" => "Damaged or ruined housing ×{0}",
@@ -142,6 +207,71 @@ public static class ModuleCrafterLocalization
             "machine_name" => "模组制造机",
             "machine_desc" => "用配方芯片和材料，经夜间加工制造通用模组。",
             "machine_flavor" => "箱形制造机，顶部是芯片槽，里面是喷头和模组夹具。",
+            "scenario_name" => "模组制造商",
+            "scenario_desc" => "你曾以拆解和重建机器模组为生，也懂得如何在废料中寻找还能使用的元件。你带着自己的制造设备来到空间站，准备把堆积如山的废旧模组变成一门稳定的生意。",
+            "scenario_advanced" => "进阶开局",
+            "scenario_gear_machine" => "模组制造机 ×1",
+            "scenario_gear_chip" => "性能模组制造芯片 ×1",
+            "scenario_gear_scav" => "每次拾荒次数 +{0}",
+            "scenario_gear_craft" => "模组制造成功率 +{0}%",
+            "scenario_gear_enhance" => "模组强化成功率 +{0}%",
+            "component_name" => "通用制造组件",
+            "component_desc" => "可替代专用材料的通用零件包，用于通用配方，可堆叠。",
+            "component_flavor" => "不需要温室、实验室、打印机或许可证，只要供应商和足够的现金。",
+            "variant_themed" => "配方：主题",
+            "variant_universal" => "配方：通用",
+            "kind_farmnutrifruit" => "营养果水培",
+            "kind_farmdreamcap" => "梦帽菇中和",
+            "kind_farmkottonloom" => "韧棉自动织造",
+            "kind_farmfillerweed" => "填料草增产",
+            "kind_farmhydroreed" => "水培芦苇滤芯",
+            "kind_evaporatorsolventrecovery" => "溶剂回收",
+            "kind_chemequipment" => "化学设备",
+            "kind_furnacejunk" => "熔炉（垃圾处理）",
+            "kind_printermetal" => "金属打印",
+            "kind_printermeleebatch" => "近战武器批量打印",
+            "kind_dnastabilizer" => "基因稳定",
+            "kind_dnapositivefilter" => "正面特性筛选",
+            "kind_dnanegativefilter" => "负面特性筛选",
+            "kind_furnaceblast" => "熔炉（高炉）",
+            "kind_farmnightmarecap" => "梦帽菇梦魇化",
+            "kind_farmsmuggler" => "水培走私",
+            "kind_printercnc" => "计算机数控",
+            "kind_dnaprecision" => "精准提取",
+            "kind_alarmtransmitter" => "警报传输",
+            "network_tab" => "模组制造",
+            "network_MODULE_CRAFTER_SUPPLY_title" => "模组制造人脉",
+            "network_MODULE_CRAFTER_SUPPLY_desc" => "每轮订购 2 张合法专用芯片，立即随机获得 1 张合法专用芯片。",
+            "network_MODULE_CRAFTER_WORKSHOP_title" => "车间强化改造",
+            "network_MODULE_CRAFTER_WORKSHOP_desc" => "获得模组强化器 ×1、强化触媒 ×3，合法芯片订货栏位 +1。",
+            "network_MODULE_CRAFTER_BLACK_MARKET_title" => "黑市芯片订货",
+            "network_MODULE_CRAFTER_BLACK_MARKET_desc" => "每周可订购 1 张违禁芯片，价格为基础价值的 150%，不影响原有黑市货源。",
+            "network_MODULE_CRAFTER_PRECISION_title" => "精密强化工艺",
+            "network_MODULE_CRAFTER_PRECISION_desc" => "专用模组强化上限从 +8 提升至 +12，并开放 +10／+12 两次专用效果提升。获得稳固夹 ×1。",
+            "network_MODULE_CRAFTER_MASTER_title" => "模组制造大师",
+            "network_MODULE_CRAFTER_MASTER_desc" => "+1 及以上强化模组最终售价额外 +10%，合法与违禁订货各增加 1 个栏位。",
+            "enhance_locked" => "需要王尔德的「精密强化工艺」：专用模组目前最多强化到 +8。",
+            "effect_next" => "\n专用效果：{0} → {1}。",
+            "effect_current" => "\n专用效果：{0}；下一等级不变。",
+            "tooltip_special_effect" => "专用效果：{0}",
+            "effect_yield" => "产量 +{0}",
+            "effect_extra_output" => "额外产物 +{0}",
+            "effect_recovery" => "溶剂回收 +{0}%",
+            "effect_quality" => "品质加成 +{0}",
+            "effect_junk_output" => "每次转化产出 {0} 个废金属",
+            "effect_melee_output" => "每次打印 {0} 件近战武器",
+            "effect_stabilizer" => "保留提取目标；磁盘保留率 {0}%",
+            "effect_extra_traits" => "额外性状提取 +{0}",
+            "effect_blast_output" => "每次转化产出 {0} 个金属锭",
+            "effect_purity_bonus" => "，无纯度惩罚",
+            "effect_smuggler_0" => "移除生长种子的违禁状态",
+            "effect_smuggler_1" => "同时移除收获作物的违禁状态",
+            "effect_smuggler_2" => "移除全部产物的违禁状态",
+            "effect_cnc" => "芯片工作量 -{0}%",
+            "effect_precision_0" => "精准选择性状",
+            "effect_precision_1" => "精准选择并保留提取目标",
+            "effect_precision_2" => "精准选择并保留提取目标与磁盘",
+            "effect_alarm" => "每次触发声望 +{0}",
             "chip_name" => "{0}配方芯片",
             "chip_desc" => "可重复使用。插入模组制造机即可开工。",
             "mat_housing" => "损坏或报废壳体 ×{0}",
@@ -234,11 +364,14 @@ public static class ModuleCrafterLocalization
     }
 
 
-    public static string FormatRequirements(ModuleCrafterChipKind kind)
+    public static string FormatRequirements(ModuleCrafterChipKind kind, ModuleCrafterRecipeVariant variant = ModuleCrafterRecipeVariant.Legacy)
     {
         ModuleCrafterRecipe recipe = ModuleCrafterRules.GetRecipe(kind);
+        ModuleCrafterMaterialNeed[] required = variant == ModuleCrafterRecipeVariant.Universal && recipe.UniversalRequired != null
+            ? recipe.UniversalRequired
+            : recipe.Required;
         System.Collections.Generic.List<string> parts = new System.Collections.Generic.List<string>();
-        foreach (ModuleCrafterMaterialNeed need in recipe.Required)
+        foreach (ModuleCrafterMaterialNeed need in required)
         {
             if (need.AllowCorruptOrRuinedHousing)
             {
@@ -255,8 +388,76 @@ public static class ModuleCrafterLocalization
 
     public static string ItemDisplayName(string itemId)
     {
+        if (itemId == ModuleCrafterExpansion.UniversalComponent)
+        {
+            return T("component_name");
+        }
+
+        // These genetics items use native text helpers rather than the usual
+        // item_<identifier>_name convention.
+        if (itemId == "plant_dna_disk")
+        {
+            return PlantGeneticsText.DiskName();
+        }
+
+        if (itemId == "dna_manipulator_module_positive_filter")
+        {
+            return PlantGeneticsText.PositiveFilterName();
+        }
+
+        if (itemId == "dna_manipulator_module_negative_filter")
+        {
+            return PlantGeneticsText.NegativeFilterName();
+        }
+
         string name = LocHelper.GetLocalizedItem("item_" + itemId + "_name");
         return string.IsNullOrEmpty(name) ? itemId : name;
+    }
+
+    public static string SpecialEffectSummary(ModuleCrafterChipKind kind, int level)
+    {
+        ModuleCrafterSpecialEffectState effect = ModuleCrafterSpecialEffectRules.Evaluate(kind, level);
+        int stage = ModuleCrafterSpecialEffectRules.StageForLevel(level);
+        switch (kind)
+        {
+            case ModuleCrafterChipKind.FarmNutrifruit:
+            case ModuleCrafterChipKind.FarmDreamCap:
+            case ModuleCrafterChipKind.FarmFillerweed:
+            case ModuleCrafterChipKind.FarmHydroreed:
+                return T("effect_yield", effect.YieldBonus);
+            case ModuleCrafterChipKind.FarmKottonLoom:
+            case ModuleCrafterChipKind.FarmNightmareCap:
+                return T("effect_extra_output", effect.OutputBonus);
+            case ModuleCrafterChipKind.EvaporatorSolventRecovery:
+                return T("effect_recovery", effect.RecoveryPercent);
+            case ModuleCrafterChipKind.ChemEquipment:
+            case ModuleCrafterChipKind.PrinterMetal:
+                return T("effect_quality", effect.QualityBonus);
+            case ModuleCrafterChipKind.FurnaceJunk:
+                return T("effect_junk_output", effect.OutputBonus);
+            case ModuleCrafterChipKind.PrinterMeleeBatch:
+                return T("effect_melee_output", effect.OutputBonus);
+            case ModuleCrafterChipKind.DnaStabilizer:
+                int retention = effect.KeepDisk == ModuleCrafterDiskRetention.Always ? 100
+                    : effect.KeepDisk == ModuleCrafterDiskRetention.FiftyPercent ? 50 : 0;
+                return T("effect_stabilizer", retention);
+            case ModuleCrafterChipKind.DnaPositiveFilter:
+            case ModuleCrafterChipKind.DnaNegativeFilter:
+                return T("effect_extra_traits", effect.ExtraTraitCount);
+            case ModuleCrafterChipKind.FurnaceBlast:
+                return T("effect_blast_output", effect.OutputBonus)
+                    + (effect.RemovePurityPenalty ? T("effect_purity_bonus") : "");
+            case ModuleCrafterChipKind.FarmSmuggler:
+                return T("effect_smuggler_" + (int)effect.ContrabandScope);
+            case ModuleCrafterChipKind.PrinterCnc:
+                return T("effect_cnc", effect.WorkloadReductionPercent);
+            case ModuleCrafterChipKind.DnaPrecision:
+                return T("effect_precision_" + stage);
+            case ModuleCrafterChipKind.AlarmTransmitter:
+                return T("effect_alarm", effect.OutputBonus);
+            default:
+                return "";
+        }
     }
 
     public static string KindName(ModuleCrafterChipKind kind)
@@ -272,7 +473,7 @@ public static class ModuleCrafterLocalization
             ModuleCrafterChipKind.Streamlining => T("kind_streamlining"),
             ModuleCrafterChipKind.NeuralCapped => T("kind_neural_capped"),
             ModuleCrafterChipKind.NeuralUncapped => T("kind_neural_uncapped"),
-            _ => kind.ToString()
+            _ => T("kind_" + kind.ToString().ToLowerInvariant())
         };
     }
 }

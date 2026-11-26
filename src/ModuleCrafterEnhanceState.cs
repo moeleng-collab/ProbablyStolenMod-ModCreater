@@ -8,6 +8,8 @@ public static class ModuleCrafterEnhanceState
     public const string BasePerformanceTag = "MODULE_ENHANCE_BASE_PERFORMANCE_INT";
     public const string BaseEfficiencyTag = "MODULE_ENHANCE_BASE_EFFICIENCY_INT";
     public const string BaseQualityTag = "MODULE_ENHANCE_BASE_QUALITY_INT";
+    public const string BaseValueTag = "MODULE_ENHANCE_BASE_VALUE";
+    public const string PriceEstimatedTag = "MODULE_ENHANCE_PRICE_ESTIMATED_BOOL";
 
     private const string PerformanceTag = "BONUS_PERCENTAGE_PERFORMANCE_INT";
     private const string EfficiencyTag = "BONUS_PERCENTAGE_EFFICIENCY_INT";
@@ -73,6 +75,7 @@ public static class ModuleCrafterEnhanceState
         EnsureBaseDimension(item, BasePerformanceTag, PerformanceTag, LearningPerformanceTag);
         EnsureBaseDimension(item, BaseEfficiencyTag, EfficiencyTag, LearningEfficiencyTag);
         EnsureBaseDimension(item, BaseQualityTag, QualityTag, LearningQualityTag);
+        EnsureBaseValueSnapshot(item);
     }
 
     public static void Recalculate(GameItem item)
@@ -88,6 +91,11 @@ public static class ModuleCrafterEnhanceState
         RecalculateDimension(item, BasePerformanceTag, PerformanceTag, LearningPerformanceTag, level, learning, false);
         RecalculateDimension(item, BaseEfficiencyTag, EfficiencyTag, LearningEfficiencyTag, level, learning, false);
         RecalculateDimension(item, BaseQualityTag, QualityTag, LearningQualityTag, level, learning, false);
+        if (TryGetKind(item.identifier, out ModuleCrafterChipKind specialKind) && specialKind == ModuleCrafterChipKind.ChemEquipment)
+        {
+            SetInt(item, QualityTag, ModuleCrafterSpecialEffectRules.Evaluate(specialKind, level).QualityBonus);
+        }
+
         ModuleEffectHelper.ResetAllTempStat(item);
         UpdateCatalogValue(item, level);
         ModuleCrafterEnhanceVisuals.Attach(item);
@@ -165,7 +173,7 @@ public static class ModuleCrafterEnhanceState
 
         string[] tags =
         {
-            LevelTag, BasePerformanceTag, BaseEfficiencyTag, BaseQualityTag,
+            LevelTag, BasePerformanceTag, BaseEfficiencyTag, BaseQualityTag, BaseValueTag, PriceEstimatedTag,
             "MODULE_EFFECT1_TAG", "MODULE_EFFECT2_TAG",
             LearningPerformanceTag, LearningEfficiencyTag, LearningQualityTag
         };
@@ -287,14 +295,48 @@ public static class ModuleCrafterEnhanceState
         item.Validate();
     }
 
+    public static long GetBaseValue(GameItem item)
+    {
+        if (item != null && item.IsTag(BaseValueTag))
+        {
+            return item.GetTagReadonly(BaseValueTag).GetLong();
+        }
+
+        return ModuleCrafterEnhanceRules.CatalogValue(item.identifier, item.spritePath, 0, FirstEffect(item), SecondEffect(item));
+    }
+
+    private static void EnsureBaseValueSnapshot(GameItem item)
+    {
+        bool invalidSpecialSnapshot = TryGetKind(item.identifier, out ModuleCrafterChipKind kind)
+            && ModuleCrafterExpansion.IsSpecialized(kind)
+            && item.IsTag(BaseValueTag)
+            && item.GetTagReadonly(BaseValueTag).GetLong() <= 1;
+        if (item.IsTag(BaseValueTag) && !invalidSpecialSnapshot)
+        {
+            return;
+        }
+
+        // 3.0.0 mistakenly wrote max(1, 0) for native specialized modules.
+        // Rebuild that invalid snapshot from the native catalog instead of
+        // preserving it forever; valid legacy snapshots remain untouched.
+        long value = invalidSpecialSnapshot
+            ? ModuleCrafterEnhanceRules.CatalogValue(item.identifier, item.spritePath, 0, FirstEffect(item), SecondEffect(item))
+            : GetBaseValue(item);
+        item.ModifyTag(BaseValueTag, delegate(TagState state) { state.Enable().SetLong(value); });
+        if (invalidSpecialSnapshot)
+        {
+            ModuleCrafterMod.LogMsg("Repaired invalid specialized module base value for " + item.identifier + ": " + value + ".");
+        }
+    }
+
     private static void UpdateCatalogValue(GameItem item, int level)
     {
-        item.unitValue = ModuleCrafterEnhanceRules.CatalogValue(
-            item.identifier,
-            item.spritePath,
+        item.unitValue = ModuleCrafterEnhanceRules.CatalogValueFromBase(
+            GetBaseValue(item),
             level,
             FirstEffect(item),
-            SecondEffect(item));
+            SecondEffect(item),
+            ModuleCrafterNetworkUpgrades.IsMasterUnlocked() && level >= 1);
     }
 
     private static void SetInt(GameItem item, string tag, int value)

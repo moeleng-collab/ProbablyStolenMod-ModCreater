@@ -1,6 +1,7 @@
 #nullable disable
 using System;
 using System.Collections.Generic;
+using HarmonyLib;
 
 public static class ModuleCrafterMachine
 {
@@ -17,6 +18,7 @@ public static class ModuleCrafterMachine
     public const string SuccessTag = "MODULE_CRAFTER_SUCCESS_TAG";
     public const string LockedInputTag = "MODULE_CRAFTER_LOCKED_INPUT_TAG";
     public const string RefundTag = "MODULE_CRAFTER_REFUND_TAG";
+    public const string VariantTag = "MODULE_CRAFTER_RECIPE_VARIANT";
 
     public static void RegisterItems(ModItemDirectory directory)
     {
@@ -29,7 +31,9 @@ public static class ModuleCrafterMachine
 
         directory.Add(ModuleCrafterIds.RefundTicket, CreateRefundTicket);
         directory.Add(ModuleCrafterIds.RefundCore, CreateRefundCore);
+        directory.Add(ModuleCrafterExpansion.UniversalComponent, ModuleCrafterComponentItem.Create);
         ModuleCrafterEnhancement.RegisterItems(directory);
+        ModuleCrafterMod.LogMsg("Registered 28 recipe chips and the universal fabrication component.");
     }
 
     public static void OnGameLoaded()
@@ -53,6 +57,7 @@ public static class ModuleCrafterMachine
             }
 
             MachineHelper.OnLoad(item);
+            SyncPowerDraw(item, MachineHelper.GetSlot(item, OutputSlotIndex) as GameSlotInventory);
             foreach (GameItem child in SlotItems(MachineHelper.GetSlot(item, ChipSlotIndex)))
             {
                 GeneralHelper.LoadLockItem(child);
@@ -176,9 +181,10 @@ public static class ModuleCrafterMachine
             .SetUppercase(false)
             .SetFillWidth(true)
             .SetMinHeight(18);
+        MachineryButton variantBtn = new MachineryButton(ModuleCrafterLocalization.T("variant_universal"));
         MachineryButton startBtn = new MachineryButton(ModuleCrafterLocalization.T("btn_start"));
         MachineryButton cancelBtn = new MachineryButton(ModuleCrafterLocalization.T("btn_cancel"));
-        MachineryStack controls = MachineryStack.Vertical(preview, startBtn, cancelBtn);
+        MachineryStack controls = MachineryStack.Vertical(preview, variantBtn, startBtn, cancelBtn);
 
         chip.mayInventoryAddItemFunc = (GameItem item, GameInventory inventory) =>
             item != null && ModuleCrafterIds.TryGetChipKind(item.identifier, out ModuleCrafterChipKind kind);
@@ -205,6 +211,7 @@ public static class ModuleCrafterMachine
             .SetName(ModuleCrafterLocalization.T("machine_name"));
 
         machine.SetGameItemType("MACHINE");
+        ModHelper.SetSource(machine, ModuleCrafterMod.ManifestId, "Module Crafter");
         machine.shortDescription = ModuleCrafterLocalization.T("machine_desc");
         machine.flavorText = ModuleCrafterLocalization.T("machine_flavor");
         machine.unitValue = ModuleCrafterRules.MachineUnitValue;
@@ -221,12 +228,13 @@ public static class ModuleCrafterMachine
         });
 
         MachineHelper.SetupBatterySlot(battery, machine);
-        MachineHelper.SetupModuleBay(modules, machine, () => RefreshPreview(machine, preview, chip, materials, output));
+        MachineHelper.SetupModuleBay(modules, machine, () => RefreshPreview(machine, preview, chip, materials, output, variantBtn));
 
+        variantBtn.SetCallback(() => CycleVariant(machine, preview, chip, materials, output, variantBtn));
         startBtn.SetCallback(() => TryStart(machine, preview, chip, materials, output));
         cancelBtn.SetCallback(() => TryCancel(machine, preview, chip, materials, output));
 
-        Action refresh = () => RefreshPreview(machine, preview, chip, materials, output);
+        Action refresh = () => RefreshPreview(machine, preview, chip, materials, output, variantBtn);
         HookInventoryChanged(battery, refresh);
         HookInventoryChanged(chip, refresh);
         HookInventoryChanged(materials, refresh);
@@ -236,12 +244,16 @@ public static class ModuleCrafterMachine
         // Never query the source callbacks again for a machine self-target: incoming is
         // the same machine, so doing so recursively invokes this delegate forever.
         machine.mayItemTargetItemFunc = (GameItem incoming, GameItem target) =>
-            incoming != machine && target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
+            incoming != machine && target == machine
+            && ModuleCrafterRules.ShouldAllowTurboBoost(MachineTurboBoosterAdv.IsTurboBooster(incoming), IsWorking(machine), HasOutputItem(output), CanPowerForWork(machine))
+            && ModuleCrafterRules.ShouldAcceptMachineTarget(
                 MayRouteOntoMachine(incoming, machine),
                 incoming?.mayItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR),
                 incoming?.mayThisTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
         machine.canItemTargetItemFunc = (GameItem incoming, GameItem target) =>
-            incoming != machine && target == machine && ModuleCrafterRules.ShouldAcceptMachineTarget(
+            incoming != machine && target == machine
+            && ModuleCrafterRules.ShouldAllowTurboBoost(MachineTurboBoosterAdv.IsTurboBooster(incoming), IsWorking(machine), HasOutputItem(output), CanPowerForWork(machine))
+            && ModuleCrafterRules.ShouldAcceptMachineTarget(
                 MayRouteOntoMachine(incoming, machine),
                 incoming?.canItemTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR),
                 incoming?.canThisTargetItemFunc?.InvokeAllReduce(incoming, machine, InvokeFuncExtensions.BoolReduceOR));
@@ -266,20 +278,21 @@ public static class ModuleCrafterMachine
     {
         string id = ModuleCrafterIds.Chip(kind);
         GameItem chip = ItemDirectory.CreateEmptyItem(id)
-            .SetSpriteAndShapeFromMod(ModuleCrafterMod.ManifestId, id)
             .SetName(ModuleCrafterLocalization.T("chip_name", ModuleCrafterLocalization.KindName(kind)));
+        chip.SetSpriteAndShapeFromMod(ModuleCrafterMod.ManifestId, id);
+
         chip.EnableTag(ModuleCrafterIds.ChipTag);
         chip.EnableTag("IMPORTANT_TAG");
         chip.canUseOutsideCombat = true;
         chip.unitValue = ModuleCrafterRules.ChipUnitValue(kind);
+        chip.shortDescription = ModuleCrafterLocalization.T("chip_desc");
+        ModHelper.SetSource(chip, ModuleCrafterMod.ManifestId, "Module Crafter");
         ModuleCrafterRecipe recipe = ModuleCrafterRules.GetRecipe(kind);
-        MachineProgressHelper.InitProgressSourceItem(
-            chip,
-            ModuleCrafterRules.DefaultBaseProcessingSpeed * recipe.BaseNights,
-            useDefaultTooltip: false);
-        if (kind == ModuleCrafterChipKind.NeuralCapped || kind == ModuleCrafterChipKind.NeuralUncapped)
+        MachineProgressHelper.InitProgressSourceItem(chip, recipe.Workload, useDefaultTooltip: false);
+        int contrabandLevel = ModuleCrafterExpansion.ContrabandLevel(kind);
+        if (contrabandLevel > 0)
         {
-            ContrabandHelper.InitContrabandItem(chip);
+            ContrabandHelper.InitContrabandItem(chip, contrabandLevel);
         }
 
         return chip;
@@ -353,8 +366,9 @@ public static class ModuleCrafterMachine
             return;
         }
 
-        ModuleCrafterMaterialPlan plan = PlanFrom(kind, materials);
-        bool powered = MachineHelper.CanPower(machine);
+        ModuleCrafterRecipeVariant variant = ReadVariant(machine, kind);
+        ModuleCrafterMaterialPlan plan = PlanFrom(kind, materials, variant);
+        bool powered = CanPowerForWork(machine);
         if (!ModuleCrafterRules.CanStart(plan.HasRequired, powered))
         {
             RefreshPreview(machine, preview, chip, materials, output);
@@ -363,11 +377,8 @@ public static class ModuleCrafterMachine
 
         ModuleCrafterRecipe recipe = ModuleCrafterRules.GetRecipe(kind);
         int quality = ModuleHelper.GetAjustedQuality(machine);
-        int success = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine));
-        MachineProgressHelper.InitProgressSourceItem(
-            chipItem,
-            ModuleCrafterRules.DefaultBaseProcessingSpeed * recipe.BaseNights,
-            useDefaultTooltip: false);
+        int success = ModuleCrafterScenario.ApplySuccessBonus(ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine)));
+        MachineProgressHelper.InitProgressSourceItem(chipItem, recipe.Workload, useDefaultTooltip: false);
         MachineProgressHelper.StartProgressTypeMachine(machine, chipItem);
 
         GeneralHelper.LockItem(chipItem);
@@ -377,6 +388,7 @@ public static class ModuleCrafterMachine
         MachineHelper.LockModuleInv(machine);
 
         SetString(machine, KindTag, kind.ToString());
+        SetString(machine, VariantTag, variant.ToString());
         SetInt(machine, SuccessTag, success);
         SetString(machine, RefundTag, plan.RefundKind.ToString());
         if (ModuleCrafterRules.ShouldConsumeTicketOnStart(plan.RefundKind))
@@ -404,6 +416,7 @@ public static class ModuleCrafterMachine
         UnlockJob(machine, chip, materials);
         MachineProgressHelper.FinishProgressTypeMachine(machine);
         ClearTag(machine, KindTag);
+        ClearTag(machine, VariantTag);
         ClearTag(machine, SuccessTag);
         ClearTag(machine, RefundTag);
         RefreshPreview(machine, preview, chip, materials, output);
@@ -417,7 +430,14 @@ public static class ModuleCrafterMachine
         GameSlotInventory output,
         GameGridInventory modules)
     {
-        if (machine == null || !IsWorking(machine))
+        if (machine == null)
+        {
+            return;
+        }
+
+        // The vanilla converter service bills this tag even while a machine is idle.
+        SyncPowerDraw(machine, output);
+        if (!IsWorking(machine))
         {
             return;
         }
@@ -478,13 +498,14 @@ public static class ModuleCrafterMachine
         else
         {
             int quality = ModuleHelper.GetAjustedQuality(machine);
-            ModuleCrafterMaterialPlan plan = PlanFrom(kind, materials);
+            ModuleCrafterRecipeVariant variant = ReadVariant(machine, kind);
+            ModuleCrafterMaterialPlan plan = PlanFrom(kind, materials, variant);
             if (!plan.HasRequired && held != null)
             {
-                plan = PlanFrom(kind, held);
+                plan = PlanFrom(kind, held, variant);
             }
 
-            success = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine));
+            success = ModuleCrafterScenario.ApplySuccessBonus(ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine)));
             ModuleCrafterMod.LogMsg("Success tag missing at finish; recomputed " + success + "%.");
         }
 
@@ -508,7 +529,7 @@ public static class ModuleCrafterMachine
         if (passed)
         {
             string outputId = ModuleCrafterIds.OutputModule(kind);
-            PlaceCraftResult(output, outputId, kind, applyShape: true);
+            PlaceCraftResult(output, outputId, kind, applyShape: !ModuleCrafterExpansion.IsSpecialized(kind));
             ConsumeLockedMaterials(held);
             ConsumeLockedMaterials(materials);
         }
@@ -532,6 +553,7 @@ public static class ModuleCrafterMachine
         UnlockJob(machine, chip, materials);
         MachineProgressHelper.FinishProgressTypeMachine(machine);
         ClearTag(machine, KindTag);
+        ClearTag(machine, VariantTag);
         ClearTag(machine, SuccessTag);
         ClearTag(machine, RefundTag);
         MachineHelper.OnMachineActioned(machine, modules);
@@ -561,9 +583,10 @@ public static class ModuleCrafterMachine
             ApplyCraftedModuleEffects(result);
         }
 
-        if (outputId == ModuleCrafterIds.NeuralCapped || outputId == ModuleCrafterIds.NeuralUncapped)
+        int contrabandLevel = ModuleCrafterExpansion.ContrabandLevel(kind);
+        if (contrabandLevel > 0)
         {
-            ContrabandHelper.InitContrabandItem(result);
+            ContrabandHelper.InitContrabandItem(result, contrabandLevel);
         }
 
         if (!TryPlaceOutput(output, result))
@@ -578,13 +601,31 @@ public static class ModuleCrafterMachine
         MachineryText preview,
         GameSlotInventory chip,
         GameGridInventory materials,
-        GameSlotInventory output)
+        GameSlotInventory output,
+        MachineryButton variantButton = null)
     {
         if (preview == null || machine == null)
         {
             return;
         }
 
+        GameItem selectedChip = chip != null ? chip.childItem : null;
+        ModuleCrafterChipKind selectedKind = ModuleCrafterChipKind.Performance;
+        bool hasSpecializedChip = selectedChip != null
+            && ModuleCrafterIds.TryGetChipKind(selectedChip.identifier, out selectedKind)
+            && ModuleCrafterExpansion.IsSpecialized(selectedKind);
+        if (variantButton != null)
+        {
+            variantButton.SetHidden(!hasSpecializedChip);
+            if (hasSpecializedChip)
+            {
+                ModuleCrafterRecipeVariant variant = ReadVariant(machine, selectedKind);
+                variantButton.SetText(ModuleCrafterLocalization.T(variant == ModuleCrafterRecipeVariant.Themed ? "variant_themed" : "variant_universal"));
+                variantButton.SetDisabled(IsWorking(machine));
+            }
+        }
+
+        SyncPowerDraw(machine, output);
         if (IsWorking(machine))
         {
             if (output != null && output.childItem != null)
@@ -593,7 +634,7 @@ public static class ModuleCrafterMachine
                 return;
             }
 
-            if (!MachineHelper.CanPower(machine))
+            if (!CanPowerForWork(machine))
             {
                 preview.SetText(ModuleCrafterLocalization.T("preview_paused_power"));
                 return;
@@ -605,7 +646,7 @@ public static class ModuleCrafterMachine
             return;
         }
 
-        GameItem chipItem = chip != null ? chip.childItem : null;
+        GameItem chipItem = selectedChip;
         if (chipItem == null || !ModuleCrafterIds.TryGetChipKind(chipItem.identifier, out ModuleCrafterChipKind kind))
         {
             preview.SetText(ModuleCrafterLocalization.T("preview_empty"));
@@ -618,15 +659,16 @@ public static class ModuleCrafterMachine
             return;
         }
 
-        ModuleCrafterMaterialPlan plan = PlanFrom(kind, materials);
-        string needs = ModuleCrafterLocalization.T("preview_needs", ModuleCrafterLocalization.FormatRequirements(kind));
+        ModuleCrafterRecipeVariant selectedVariant = ReadVariant(machine, kind);
+        ModuleCrafterMaterialPlan plan = PlanFrom(kind, materials, selectedVariant);
+        string needs = ModuleCrafterLocalization.T("preview_needs", ModuleCrafterLocalization.FormatRequirements(kind, selectedVariant));
         if (!plan.HasRequired)
         {
             preview.SetText(ModuleCrafterLocalization.T("preview_missing") + needs);
             return;
         }
 
-        if (!MachineHelper.CanPower(machine))
+        if (!CanPowerForWork(machine))
         {
             preview.SetText(ModuleCrafterLocalization.T("preview_no_power"));
             return;
@@ -634,10 +676,9 @@ public static class ModuleCrafterMachine
 
         ModuleCrafterRecipe recipe = ModuleCrafterRules.GetRecipe(kind);
         int quality = ModuleHelper.GetAjustedQuality(machine);
-        int successReady = ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine));
-        int baseSpeed = machine.GetTagReadonly("BASE_PROCESSING_SPEED_TAG").GetInt();
+        int successReady = ModuleCrafterScenario.ApplySuccessBonus(ModuleCrafterRules.ComputeSuccessPercent(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine)));
         int currentSpeed = machine.GetTagReadonly("CURRENT_PROCESSING_SPEED_TAG").GetInt();
-        int nights = ModuleCrafterRules.ComputeActualNights(recipe.BaseNights, baseSpeed, currentSpeed);
+        int nights = ModuleCrafterRules.ComputeActualNightsForWorkload(recipe.Workload, currentSpeed);
         string cap = ModuleCrafterRules.IsSoftCapped(kind, quality, plan.ExtraElectronics, plan.UsedIntactHousing, ModuleCrafterEnhanceState.HighestEnhancedQualityLevel(machine))
             ? ModuleCrafterLocalization.T("preview_capped")
             : "";
@@ -667,15 +708,80 @@ public static class ModuleCrafterMachine
         };
     }
 
-    private static ModuleCrafterMaterialPlan PlanFrom(ModuleCrafterChipKind kind, GameGridInventory materials)
+    private static ModuleCrafterRecipeVariant ReadVariant(GameItem machine, ModuleCrafterChipKind kind)
+    {
+        if (!ModuleCrafterExpansion.IsSpecialized(kind) || machine == null || !machine.IsTag(VariantTag))
+        {
+            return ModuleCrafterExpansion.IsSpecialized(kind) ? ModuleCrafterRecipeVariant.Universal : ModuleCrafterRecipeVariant.Legacy;
+        }
+
+        string value = machine.GetTagReadonly(VariantTag).GetString();
+        if (Enum.TryParse(value, out ModuleCrafterRecipeVariant parsed))
+        {
+            return parsed;
+        }
+
+        return ModuleCrafterRecipeVariant.Universal;
+    }
+
+    private static void CycleVariant(
+        GameItem machine,
+        MachineryText preview,
+        GameSlotInventory chip,
+        GameGridInventory materials,
+        GameSlotInventory output,
+        MachineryButton variantButton)
+    {
+        if (machine == null || IsWorking(machine))
+        {
+            return;
+        }
+
+        GameItem chipItem = chip != null ? chip.childItem : null;
+        if (chipItem == null || !ModuleCrafterIds.TryGetChipKind(chipItem.identifier, out ModuleCrafterChipKind kind)
+            || !ModuleCrafterExpansion.IsSpecialized(kind))
+        {
+            RefreshPreview(machine, preview, chip, materials, output, variantButton);
+            return;
+        }
+
+        ModuleCrafterRecipeVariant next = ReadVariant(machine, kind) == ModuleCrafterRecipeVariant.Universal
+            ? ModuleCrafterRecipeVariant.Themed
+            : ModuleCrafterRecipeVariant.Universal;
+        machine.ModifyTag(VariantTag, delegate(TagState state)
+        {
+            state.Enable().SetString(next.ToString());
+        });
+        RefreshPreview(machine, preview, chip, materials, output, variantButton);
+    }
+
+    private static ModuleCrafterMaterialPlan PlanFrom(
+        ModuleCrafterChipKind kind,
+        GameGridInventory materials,
+        ModuleCrafterRecipeVariant variant = ModuleCrafterRecipeVariant.Legacy)
     {
         List<string> ids = new List<string>();
-        foreach (GameItem item in SlotItems(materials))
+        foreach (GameItem item in ExpandedSlotItems(materials))
         {
             ids.Add(item.identifier);
         }
 
-        return ModuleCrafterRules.PlanMaterials(kind, ids);
+        return ModuleCrafterRules.PlanMaterials(kind, ids, variant);
+    }
+
+    private static List<GameItem> ExpandedSlotItems(GameInventory inventory)
+    {
+        List<GameItem> result = new List<GameItem>();
+        foreach (GameItem item in SlotItems(inventory))
+        {
+            int count = item.identifier == ModuleCrafterExpansion.UniversalComponent ? Math.Max(0, item.unitCount) : 1;
+            for (int i = 0; i < count; i++)
+            {
+                result.Add(item);
+            }
+        }
+
+        return result;
     }
 
     private static void LockPlannedMaterials(GameGridInventory materials, ModuleCrafterMaterialPlan plan)
@@ -685,7 +791,7 @@ public static class ModuleCrafterMachine
             return;
         }
 
-        List<GameItem> items = new List<GameItem>(SlotItems(materials));
+        List<GameItem> items = ExpandedSlotItems(materials);
         foreach (int index in plan.ConsumedIndices)
         {
             if (index < 0 || index >= items.Count)
@@ -711,7 +817,7 @@ public static class ModuleCrafterMachine
             return;
         }
 
-        List<GameItem> items = new List<GameItem>(SlotItems(materials));
+        List<GameItem> items = ExpandedSlotItems(materials);
         foreach (int index in plan.RefundLockIndices)
         {
             if (index < 0 || index >= items.Count || items[index] == null)
@@ -957,23 +1063,56 @@ public static class ModuleCrafterMachine
             return;
         }
 
-        List<GameItem> items = new List<GameItem>(SlotItems(materials));
+        List<GameItem> items = ExpandedSlotItems(materials);
+        Dictionary<int, int> requiredByIndex = new Dictionary<int, int>();
         foreach (int index in plan.ConsumedIndices)
         {
-            if (index < 0 || index >= items.Count)
+            if (index >= 0 && index < items.Count)
             {
-                continue;
+                requiredByIndex[index] = requiredByIndex.TryGetValue(index, out int count) ? count + 1 : 1;
             }
+        }
 
-            GameItem item = items[index];
+        foreach (KeyValuePair<int, int> pair in requiredByIndex)
+        {
+            GameItem item = items[pair.Key];
             if (item == null)
             {
                 continue;
             }
 
-            if (!TryMoveInto(held, item))
+            if (item.identifier != ModuleCrafterExpansion.UniversalComponent)
             {
-                ModuleCrafterMod.LogMsg("Could not stash a planned material; it will stay in the materials bay.");
+                if (!TryMoveInto(held, item))
+                {
+                    ModuleCrafterMod.LogMsg("Could not stash a planned material; it will stay in the materials bay.");
+                }
+
+                continue;
+            }
+
+            int required = pair.Value;
+            if (item.unitCount < required)
+            {
+                ModuleCrafterMod.LogMsg("Component stack changed before starting; job was not started.");
+                continue;
+            }
+
+            GameItem planned = item;
+            if (item.unitCount > required)
+            {
+                planned = item.GetSplitItem(required);
+                GeneralHelper.SetItemOwned(planned, GeneralHelper.IsItemOwned(item));
+                item.DisableTag(LockedInputTag);
+                GeneralHelper.UnlockItem(item);
+            }
+
+            planned.EnableTag(LockedInputTag);
+            GeneralHelper.LockItem(planned);
+            if (!TryMoveInto(held, planned))
+            {
+                GraphUtils.EmporiumTryAdd(planned);
+                ModuleCrafterMod.LogMsg("Could not stash planned components; returned them to store inventory.");
             }
         }
     }
@@ -1053,7 +1192,10 @@ public static class ModuleCrafterMachine
         GameItem current = slot.childItem;
         if (current == null)
         {
-            TryMoveInto(slot, incoming);
+            if (!TryMoveInto(slot, incoming))
+            {
+                ModuleCrafterMod.LogMsg("Could not insert " + incoming.identifier + " into slot " + (incoming.IsTag("power_source_item") ? "battery" : "chip") + ".");
+            }
             return;
         }
 
@@ -1062,7 +1204,63 @@ public static class ModuleCrafterMachine
             return;
         }
 
-        GraphUtils.SwapItemsInPlace(incoming, current);
+        if (!GraphUtils.SwapItemsInPlace(incoming, current))
+        {
+            ModuleCrafterMod.LogMsg("Could not replace " + current.identifier + " with " + incoming.identifier + ".");
+        }
+    }
+
+    // PowerHelper gives every battery a battery-to-battery targeting vote. The
+    // native game ORs votes attached to the same callback, so appending this
+    // narrow vote allows battery -> crafter without weakening inventory rules or
+    // changing battery -> battery / battery -> other machine behavior.
+    [HarmonyPatch(typeof(PowerHelper), nameof(PowerHelper.InitPowerSourceItem))]
+    internal static class BatteryDropPatch
+    {
+        private static void Postfix(GameItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            item.mayThisTargetItemFunc = (Func<GameItem, GameItem, bool>)Delegate.Combine(
+                item.mayThisTargetItemFunc,
+                new Func<GameItem, GameItem, bool>(AllowCrafterTarget));
+            item.canThisTargetItemFunc = (Func<GameItem, GameItem, bool>)Delegate.Combine(
+                item.canThisTargetItemFunc,
+                new Func<GameItem, GameItem, bool>(AllowCrafterTarget));
+        }
+
+        private static bool AllowCrafterTarget(GameItem source, GameItem target)
+        {
+            return source != null && target != null && source != target
+                && source.IsTag("power_source_item")
+                && target.IsTag(ModuleCrafterIds.MachineTag);
+        }
+    }
+
+    // ItemMouseDragHandler tries generic container insertion before Target().
+    // With an occupied battery slot that would route the new battery into the
+    // materials grid, preventing RouteOntoMachine() from performing the swap.
+    [HarmonyPatch(typeof(GameItem), nameof(GameItem.MayHaveValidInventorySlot))]
+    internal static class OccupiedBatteryContainerPatch
+    {
+        private static void Postfix(GameItem __instance, GameItem item, ref bool __result)
+        {
+            if (!__result || item == null || __instance == null
+                || !item.IsTag("power_source_item")
+                || !__instance.IsTag(ModuleCrafterIds.MachineTag))
+            {
+                return;
+            }
+
+            GameItem current = MachineHelper.GetBatterySlot(__instance)?.childItem;
+            if (current != null && current != item)
+            {
+                __result = false;
+            }
+        }
     }
 
     private static ModuleCrafterChipKind ReadKind(GameItem machine, GameSlotInventory chip)
@@ -1104,6 +1302,43 @@ public static class ModuleCrafterMachine
     private static bool IsWorking(GameItem machine)
     {
         return machine != null && MachineProgressHelper.GetMachineState(machine) == MachineProgressHelper.STATE_WORKING;
+    }
+
+    private static int WorkingPowerDraw(GameItem machine)
+    {
+        return ModuleCrafterRules.ComputeWorkingPowerDraw(
+            machine.GetTagReadonly("MACHINERY_DRAWN_POWER_BASE").GetInt(),
+            machine.GetTagReadonly("TOTAL_PERCENTAGE_POWER_BONUS_INT").GetInt(),
+            machine.IsTag("MACHINE_EFFICIENCY_RATIO_INT") ? machine.GetTagReadonly("MACHINE_EFFICIENCY_RATIO_INT").GetInt() : 0,
+            machine.GetTagReadonly("TOTAL_PERCENTAGE_PERFORMANCE_BONUS_INT").GetInt(),
+            machine.IsTag("MACHINE_PERFORMANCE_RATIO_INT") ? machine.GetTagReadonly("MACHINE_PERFORMANCE_RATIO_INT").GetInt() : 0,
+            machine.IsTag("MACHINE_PERFORMANCE_REDUCES_POWER_TAG"));
+    }
+
+    private static bool CanPowerForWork(GameItem machine)
+    {
+        if (machine == null)
+        {
+            return false;
+        }
+
+        GameSlotInventory battery = MachineHelper.GetBatterySlot(machine);
+        GameItem source = battery != null ? battery.childItem : null;
+        return source != null && PowerHelper.CanDrawPowerSource(source, WorkingPowerDraw(machine));
+    }
+
+    private static void SyncPowerDraw(GameItem machine, GameSlotInventory output)
+    {
+        if (machine == null)
+        {
+            return;
+        }
+
+        bool outputBlocked = output != null && output.childItem != null;
+        SetInt(machine, "machinery_drawn_power", ModuleCrafterRules.GetPowerDrawForBilling(
+            IsWorking(machine),
+            outputBlocked,
+            WorkingPowerDraw(machine)));
     }
 
     private static int NextExclusive(int exclusive)
